@@ -1,8 +1,27 @@
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from mangum import Mangum
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press F9 to toggle the breakpoint.
+from .utils import Utils
 
 
-if __name__ == '__main__':
-    print_hi('PyCharm')
+@asynccontextmanager
+async def app_lifespan(application: FastAPI):
+    Utils.log_info("Starting the application")
+    yield
+
+
+app = FastAPI(
+    title="Chatbot API",
+    description="Chatbot API description",
+    version="1.0.0",
+    lifespan=app_lifespan,
+)
+
+
+@app.get("/")
+async def root():
+    return {"msg": "Hello World"}
+
+
+handler = Mangum(app)

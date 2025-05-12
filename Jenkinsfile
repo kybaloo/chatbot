@@ -33,7 +33,7 @@ pipeline {
             steps {
                 script {
                     echo "Building the project..."
-                    // Add your build commands here
+                    
                 }
             }
         }
@@ -44,6 +44,12 @@ pipeline {
                     echo "Deploying the project..."
                     // Add your deployment commands here
                 }
+            }
+        }
+
+        stage('Endpoint Test') {
+            steps{
+
             }
         }
     }
