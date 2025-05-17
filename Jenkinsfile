@@ -34,7 +34,7 @@ pipeline {
             steps {
                 script {
                     // Add your test commands here
-                    echo "Running tests..."
+                    echo "Running tests...."
                     sh "make test"
                 }
             }
