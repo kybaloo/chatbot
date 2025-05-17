@@ -4,10 +4,10 @@ from mangum import Mangum
 
 from .utils import Utils
 
-
+# Init Job
 @asynccontextmanager
 async def app_lifespan(application: FastAPI):
-    Utils.log_info("Starting the application")
+    Utils.log_info("Starting the application") 
     yield
 
 
