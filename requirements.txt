@@ -1,5 +1,6 @@
-fastapi[standard]
 pytest
+fastapi[standard]
+pydantic_settings
 boto3
 mangum
-pydantic_settings
+httpx

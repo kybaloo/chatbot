@@ -7,6 +7,7 @@ from typing import List
 import boto3
 
 from src.config import env_vars
+## Simple edit
 
 
 class Utils:
@@ -15,21 +16,21 @@ class Utils:
 
     @staticmethod
     def log_info(message):
-        """summary
+        """_summary_
         Log a simple info message
         """
         logging.getLogger("uvicorn.error").info(msg=f"==> {message}")
 
     @staticmethod
     def log_debug(message):
-        """summary
+        """_summary_
         Log a debug message
         """
         logging.getLogger("uvicorn.error").debug(msg=f"==> {message}")
 
     @staticmethod
     def log_error(message):
-        """summary
+        """_summary_
         Log an error message
         """
         logging.getLogger("uvicorn.error").error(msg=f"==> {message}")
