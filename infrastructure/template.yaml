@@ -11,6 +11,8 @@ Parameters:
     AllowedValues:
       - kybaloo
       - dev
+      - preprod
+      - prod
 
 ###############################################################################
 Resources:
