@@ -1,0 +1,222 @@
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters,
+)
+from uuid import uuid4
+from datetime import datetime
+import asyncio
+
+from src.config import env_vars
+from src.utils import Utils
+from src.models import Conversation
+from mistralai import Mistral
+
+
+class TelegramBot:
+    def __init__(self):
+        self.api_key = env_vars.MISTRAL_API_KEY
+        self.model = "mistral-small-latest"
+        self.mistral_client = Mistral(api_key=self.api_key)
+        self.active_conversations = {}  # Cache mémoire temporaire des conversations actives
+        self.bot = Bot(token=env_vars.TELEGRAM_BOT_TOKEN)
+        self.application = None
+        self._initialize_application()
+
+    def _initialize_application(self):
+        """Initialise l'application Telegram pour le mode webhook"""
+        self.application = Application.builder().token(env_vars.TELEGRAM_BOT_TOKEN).build()
+        
+        # Ajouter les gestionnaires
+        self.application.add_handler(CommandHandler("start", self.start_command))
+        self.application.add_handler(CommandHandler("help", self.help_command))
+        self.application.add_handler(CommandHandler("history", self.history_command))
+        self.application.add_handler(CallbackQueryHandler(self.handle_conversation_selection, pattern=r"^conv_"))
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+        
+        # Gestionnaire d'erreurs
+        self.application.add_error_handler(self.error_handler)
+
+    async def process_update(self, update_data: dict):
+        """
+        Traite une mise à jour reçue via webhook
+        """
+        try:
+            # Créer un objet Update à partir des données JSON
+            update = Update.de_json(update_data, self.bot)
+            
+            # Traiter la mise à jour avec l'application
+            await self.application.process_update(update)
+            
+        except Exception as e:
+            Utils.log_error(f"Erreur lors du traitement de la mise à jour: {str(e)}")
+            raise
+
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Gère la commande /start"""
+        user = update.effective_user
+        Utils.log_info(f"User {user.id} ({user.username}) started the bot")
+        
+        # Créer une nouvelle conversation
+        conversation = Utils.create_new_conversation(
+            user_id=str(user.id), 
+            username=user.username
+        )
+        
+        # Mettre en cache la conversation active
+        self.active_conversations[user.id] = conversation.conversation_id
+        
+        await update.message.reply_text(
+            f"Bonjour {user.first_name} ! Je suis votre assistant IA. Comment puis-je vous aider aujourd'hui ?"
+        )
+
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Gère la commande /help"""
+        help_text = (
+            "Voici comment m'utiliser :\n\n"
+            "- Envoyez-moi simplement un message et je vous répondrai\n"
+            "- /start : Démarre une nouvelle conversation\n"
+            "- /help : Affiche ce message d'aide\n"
+            "- /history : Affiche l'historique de vos conversations"
+        )
+        await update.message.reply_text(help_text)
+
+    async def history_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Gère la commande /history pour afficher l'historique des conversations"""
+        user = update.effective_user
+        conversations = Utils.get_user_conversations(str(user.id))
+        
+        if not conversations:
+            await update.message.reply_text("Vous n'avez pas encore d'historique de conversations.")
+            return
+        
+        # Créer un clavier inline avec les conversations
+        keyboard = []
+        for conv in conversations:
+            # Obtenir la date de la dernière mise à jour au format lisible
+            date_str = conv.updated_at.strftime("%d/%m/%Y %H:%M")
+            # Obtenir le début du premier message s'il existe
+            first_message = "Nouvelle conversation"
+            if conv.messages:
+                first_message = conv.messages[0].content[:30] + "..." if len(conv.messages[0].content) > 30 else conv.messages[0].content
+            
+            button_text = f"{date_str} - {first_message}"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"conv_{conv.conversation_id}")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Voici vos conversations précédentes :", reply_markup=reply_markup)
+
+    async def handle_conversation_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Gère la sélection d'une conversation depuis le menu d'historique"""
+        query = update.callback_query
+        await query.answer()
+        
+        conversation_id = query.data.replace("conv_", "")
+        user_id = str(update.effective_user.id)
+        
+        conversation = Utils.get_conversation(user_id, conversation_id)
+        if not conversation:
+            await query.edit_message_text(text="Désolé, cette conversation n'est plus disponible.")
+            return
+        
+        # Mettre en cache la conversation active
+        self.active_conversations[update.effective_user.id] = conversation_id
+        
+        # Afficher un résumé de la conversation
+        messages_preview = ""
+        for i, message in enumerate(conversation.messages[:5]):  # Limiter à 5 messages pour l'aperçu
+            if i >= 2:  # Limiter à 2 messages dans le résumé
+                remaining = len(conversation.messages) - 2
+                messages_preview += f"\n... et {remaining} autres messages"
+                break
+            role_display = "Vous" if message.role == "user" else "Assistant"
+            content_preview = message.content[:50] + "..." if len(message.content) > 50 else message.content
+            messages_preview += f"\n{role_display}: {content_preview}"
+        
+        await query.edit_message_text(
+            text=f"Conversation du {conversation.created_at.strftime('%d/%m/%Y')}:\n{messages_preview}\n\n"
+                 f"La conversation est maintenant active. Vous pouvez continuer à échanger des messages.",
+        )
+
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Gère les messages texte reçus de l'utilisateur"""
+        user = update.effective_user
+        user_id = str(user.id)
+        message_text = update.message.text
+        
+        # Récupérer ou créer une conversation
+        conversation_id = self.active_conversations.get(user.id)
+        conversation = None
+        
+        if conversation_id:
+            conversation = Utils.get_conversation(user_id, conversation_id)
+        
+        if not conversation:
+            # Créer une nouvelle conversation si aucune n'est active
+            conversation = Utils.create_new_conversation(user_id, user.username)
+            self.active_conversations[user.id] = conversation.conversation_id
+        
+        # Ajouter le message utilisateur à la conversation
+        conversation.add_message(role="user", content=message_text)
+        
+        # Envoyer un message "en train d'écrire"
+        await update.message.chat.send_action(action="typing")
+        
+        # Préparer les messages pour l'API Mistral
+        mistral_messages = []
+        for msg in conversation.messages:
+            mistral_messages.append({
+                "role": msg.role,
+                "content": msg.content
+            })
+        
+        # Appeler l'API Mistral
+        try:
+            chat_response = self.mistral_client.chat.complete(
+                model=self.model,
+                messages=mistral_messages
+            )
+            
+            # Extraire la réponse
+            assistant_response = chat_response.choices[0].message.content
+            
+            # Ajouter la réponse à la conversation
+            conversation.add_message(role="assistant", content=assistant_response)
+            
+            # Sauvegarder la conversation mise à jour
+            Utils.save_conversation(conversation)
+            
+            # Envoyer la réponse à l'utilisateur
+            await update.message.reply_text(assistant_response)
+            
+        except Exception as e:
+            Utils.log_error(f"Erreur lors de l'appel à Mistral API: {str(e)}")
+            await update.message.reply_text(
+                "Désolé, j'ai rencontré un problème lors du traitement de votre demande. Veuillez réessayer plus tard."
+            )
+
+    async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Gère les erreurs rencontrées par le dispatcher"""
+        Utils.log_error(f"Exception lors du traitement d'une mise à jour: {context.error}")
+          # Informer l'utilisateur d'une erreur
+        if update and update.effective_message:
+            await update.effective_message.reply_text(
+                "Désolé, une erreur s'est produite lors du traitement de votre message."
+            )
+
+    def run(self):
+        """Lance le bot Telegram en mode webhook"""
+        Utils.log_info("Bot Telegram initialisé pour mode webhook")
+        # En mode webhook, nous n'utilisons pas run_webhook() ici
+        # car le traitement se fait via process_update() appelé par FastAPI
+
+
+# Fonction pour initialiser et exécuter le bot (conservée pour rétrocompatibilité)
+def run_telegram_bot():
+    bot = TelegramBot()
+    bot.run()
