@@ -235,14 +235,14 @@ pipeline {
                     API_URL=\$(aws cloudformation describe-stacks \
                         --stack-name chatbot-stack-${BRANCH_NAME} \
                         --region ${AWS_REGION} \
-                        --query 'Stacks[0].Outputs[?OutputKey==\`ApiUrl\`].OutputValue' \
+                        --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
                         --output text)
                         
                     # Envoyer la notification avec l'URL
                     curl -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
                         -d chat_id=<CHAT_ID_CI> \
                         -d parse_mode=Markdown \
-                        -d text='✅ *Déploiement réussi* pour la branche `${BRANCH_NAME}` du chatbot !\n\nAPI: '\${API_URL}'
+                        -d text='✅ *Déploiement réussi* pour la branche `${BRANCH_NAME}` du chatbot !\n\nAPI: '\${API_URL}''
                 """
             }
         }
