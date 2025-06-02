@@ -1,16 +1,16 @@
 pipeline {
-    agent any
-
-    options {
+    agent any    options {
         ansiColor('xterm')
-    }    environment {
+    }
+    
+    environment {
         // Define environment variables here
         BOT_NAME = 'telegram-chatbot'
         AWS_REGION = 'eu-west-3' 
         TELEGRAM_BOT_TOKEN = credentials('telegram-bot-token')
         MISTRAL_API_KEY = credentials('mistral-api-key')
         WEBHOOK_URL = 'https://4y9lvphtwh.execute-api.eu-west-3.amazonaws.com/webhook/telegram'
-        // AWS_CREDENTIALS est géré par le plugin withAWS
+        // AWS credentials sont gérés automatiquement par Jenkins
         DYNAMO_TABLE = "chatbot-conversations-kybaloo"
         LOG_LEVEL = "INFO"
         ENV_NAME = "kybaloo"
@@ -100,9 +100,7 @@ pipeline {
                     sh "make build"
                 }
             }
-        }
-
-        stage('Deploy') {
+        }        stage('Deploy') {
             steps {
                 script {
                     echo "Deploying the project..."
@@ -118,6 +116,7 @@ pipeline {
                             aws cloudformation deploy \\
                                 --template-file infrastructure/template.yaml \\
                                 --stack-name chatbot-stack-${BRANCH_NAME} \\
+                                --region ${AWS_REGION} \\
                                 --parameter-overrides \\
                                     EnvironmentName=${BRANCH_NAME} \\
                                     MistralApiKey=${MISTRAL_API_KEY} \\
@@ -127,11 +126,11 @@ pipeline {
                                     EnableTelegramBot=${ENABLE_TELEGRAM_BOT} \\
                                     ConversationTTLDays=${CONVERSATION_TTL_DAYS} \\
                                 --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-                        """
-                        // Récupérer l'URL de l'API déployée
+                        """                        // Récupérer l'URL de l'API déployée
                         sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
                                 --stack-name chatbot-stack-${BRANCH_NAME} \\
+                                --region ${AWS_REGION} \\
                                 --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
                                 --output text)
                             echo "API déployée à: \${API_URL}"
@@ -143,11 +142,13 @@ pipeline {
                     }
                 }
             }
-        }
+        }    
     }
-      post {
+    
+    post {
         always {
             echo "Fin de l'exécution du pipeline"
+            // Ne pas utiliser cleanWs() qui nécessite un contexte spécifique
         }
         success {
             echo "Build réussi ! L'URL du webhook est : ${WEBHOOK_URL}"
