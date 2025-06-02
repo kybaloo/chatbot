@@ -10,11 +10,13 @@ def test_read_main():
     response = client.get("/")
     assert response.status_code == 200
     assert response.json() == {"msg": "Hello World"}
-    
+
+
 def test_read_prompt():
     response = client.get("/prompt")
     assert response.status_code == 404
     assert response.json() != {"msg": "Hello", "response": ""}
+
 
 def test_noread_prompt():
     response = client.get("/prompt")
@@ -31,7 +33,6 @@ class Calculator:
         if b == 0:
             raise ValueError("Division by zero is not allowed")
         return a / b
-
 
 
 @pytest.fixture
