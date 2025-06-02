@@ -145,24 +145,24 @@ pipeline {
         }
     }
     
-    post {
-        always {
-            script {
-                echo "Cleaning workspace..."
-                cleanWs()
-            }
-        }
-        success {
-            script {
-                // Notify success
-                echo "Build succeeded!"
-            }
-        }
-        failure {
-            script {
-                // Notify failure
-                echo "Build failed!"
-            }
-        }
-    }
+    // post {
+    //     always {
+    //         script {
+    //             echo "Cleaning workspace..."
+    //             cleanWs()
+    //         }
+    //     }
+    //     success {
+    //         script {
+    //             // Notify success
+    //             echo "Build succeeded!"
+    //         }
+    //     }
+    //     failure {
+    //         script {
+    //             // Notify failure
+    //             echo "Build failed!"
+    //         }
+    //     }
+    // }
 }
