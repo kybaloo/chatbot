@@ -13,7 +13,7 @@ venv: clean
 	python3 -m venv venv
 
 install:
-	pip install -r requirements.txt
+	venv/bin/pip install -r requirements.txt
 
 build:
 	sam build --use-container -t infrastructure/template.yaml
@@ -81,15 +81,15 @@ deploy:
 
 
 serve:
-	venv/bin/fastapi dev src/app.py
+	.venv/bin/fastapi dev src/app.py
 
 test:
 	@echo "Running tests..."
-	python -m pytest
+	.venv/bin/python -m pytest
 
 test-unit:
 	@echo "Running unit tests..."
-	python -m pytest tests/models tests/repositories tests/services || echo "No unit tests found, skipping"
+	.venv/bin/python -m pytest tests/models tests/repositories tests/services || echo "No unit tests found, skipping"
 
 test-integration:
 	@echo "Running integration tests..."
