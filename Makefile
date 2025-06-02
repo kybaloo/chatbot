@@ -17,26 +17,108 @@ install:
 
 build:
 	sam build --use-container -t infrastructure/template.yaml
+	docker build -t chatbot:latest .
 
 deploy-local:
 	sam local start-api
+
+run-local:
+	docker run -p 80:80 -p 8000:8000 -v $(PWD)/.env:/code/.env chatbot:latest
+	
+run-dev:
+	uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
+
+run-local-dynamo:
+	@echo "Démarrage de DynamoDB Local..."
+	powershell -File setup_local_dynamo.ps1
+
+create-local-table:
+	@echo "Création de la table DynamoDB locale..."
+	python scripts/create_local_table.py
+
+setup-ngrok:
+	@echo "Configuration du webhook Telegram avec ngrok..."
+	python scripts/setup_ngrok_webhook.py
+
+dev-setup:
+	@echo "Configuration de l'environnement de développement..."
+	powershell -File dev_setup.ps1
+
+format:
+	@echo "Formatting code with black..."
+	venv/bin/black src tests
+
+lint:
+	@echo "Linting code with flake8..."
+	venv/bin/flake8 src tests
+
+docs:
+	@echo "Generating documentation..."
+	venv/bin/sphinx-build -b html docs/source docs/build
 
 deploy:
 	@echo "Deploying to " ${env}
 	# Extract env from the branch name
 
-	sam deploy --resolve-s3 --template-file .aws-sam/build/template.yaml --stack-name multi-stack-${env} \
-         --capabilities CAPABILITY_IAM --region ${AWS_REGION} --parameter-overrides EnvironmentName=${env} --no-fail-on-empty-changeset
+	@if [ -z "$(MISTRAL_API_KEY)" ]; then \
+		echo "ERROR: MISTRAL_API_KEY environment variable must be set"; \
+		exit 1; \
+	fi
+
+	@if [ -z "$(TELEGRAM_BOT_TOKEN)" ]; then \
+		echo "ERROR: TELEGRAM_BOT_TOKEN environment variable must be set"; \
+		exit 1; \
+	fi
+
+	sam deploy --resolve-s3 --template-file .aws-sam/build/template.yaml --stack-name chatbot-stack-${env} \
+         --capabilities CAPABILITY_IAM --region ${AWS_REGION} \
+         --parameter-overrides \
+             EnvironmentName=${env} \
+             MistralApiKey=${MISTRAL_API_KEY} \
+             TelegramBotToken=${TELEGRAM_BOT_TOKEN} \
+             WebhookUrl=${WEBHOOK_URL} \
+         --no-fail-on-empty-changeset
 
 
 serve:
-	venv/bin/fastapi dev src/main.py
+	venv/bin/fastapi dev src/app.py
 
 test:
 	@echo "Running tests..."
 	venv/bin/pytest
 
+test-unit:
+	@echo "Running unit tests..."
+	venv/bin/pytest tests/models tests/repositories tests/services
+
+test-integration:
+	@echo "Running integration tests..."
+	venv/bin/pytest tests/test_api_integration.py
+
 test-endpoint:
 	@echo "Running endpoint tests..."
-	aws cloudformation describe-stacks --stack-name multi-stack-${env} --region ${AWS_REGION} \
-		--query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text | xargs -I {} curl -X GET {}
+	$(eval API_URL := $(shell aws cloudformation describe-stacks --stack-name chatbot-stack-${env} --region ${AWS_REGION} \
+		--query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text))
+	
+	@echo "Testing base endpoint at ${API_URL}"
+	@curl -s "${API_URL}" | grep "Hello World" && echo "Base endpoint test: PASSED" || echo "Base endpoint test: FAILED"
+	
+	@echo "Testing chat endpoint"
+	@curl -s "${API_URL}/chat?question=Bonjour" | grep "answer" && echo "Chat endpoint test: PASSED" || echo "Chat endpoint test: FAILED"
+	
+	@echo "Testing conversation endpoint"
+	@curl -s "${API_URL}/conversations/test-user" | grep "conversations" && echo "Conversations endpoint test: PASSED" || echo "Conversations endpoint test: FAILED"
+
+setup-telegram-webhook:
+	@if [ -z "$(TELEGRAM_BOT_TOKEN)" ]; then \
+		echo "ERROR: TELEGRAM_BOT_TOKEN environment variable must be set"; \
+		exit 1; \
+	fi
+	
+	@if [ -z "$(WEBHOOK_URL)" ]; then \
+		echo "ERROR: WEBHOOK_URL environment variable must be set"; \
+		exit 1; \
+	fi
+	
+	@echo "Setting up Telegram webhook..."
+	@curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=${WEBHOOK_URL}/${TELEGRAM_BOT_TOKEN}" | grep "ok" && echo "Webhook setup: PASSED" || echo "Webhook setup: FAILED"
