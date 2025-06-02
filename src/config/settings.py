@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     # Configuration AWS
     AWS_REGION_NAME: str = ""
     DYNAMO_TABLE: str = ""
-    AWS_PROFILE: str = ""
     
     # Configuration API
     MISTRAL_API_KEY: str = ""
