@@ -145,7 +145,7 @@ pipeline {
         }
     }
     
-     post {
+    post {
         always {
             script {
                 echo "Cleaning workspace..."
