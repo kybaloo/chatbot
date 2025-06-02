@@ -1,8 +1,10 @@
 pipeline {
-    agent any    options {
+    agent any
+
+    options {
         ansiColor('xterm')
     }
-    
+
     environment {
         // Define environment variables here
         BOT_NAME = 'telegram-chatbot'
@@ -63,7 +65,6 @@ pipeline {
             }
         }
 
-
         stage('Code Quality') {
             steps {
                 script {
@@ -100,7 +101,9 @@ pipeline {
                     sh "make build"
                 }
             }
-        }        stage('Deploy') {
+        }
+
+        stage('Deploy') {
             steps {
                 script {
                     echo "Deploying the project..."
@@ -142,7 +145,7 @@ pipeline {
                     }
                 }
             }
-        }    
+        }
     }
     
     post {
