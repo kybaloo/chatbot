@@ -145,62 +145,27 @@ pipeline {
         }
     }
     
-    post {
+     post {
         always {
             script {
-                try {
-                    echo "Generating test reports..."
-
-                    if (fileExists('test-results')) {
-                        archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
-                    }
-
-                    echo "Cleaning up resources..."
-                } catch (Exception e) {
-                    echo "Error in post/always: ${e.message}"
-                }
+                // Clean workspace
+                cleanWs()
             }
         }
-
         success {
             script {
-                try {
-                    echo "Build succeeded!"
-                    withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
-                        sh """
-                            API_URL=\$(aws cloudformation describe-stacks \\
-                                --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --region ${AWS_REGION} \\
-                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
-                                --output text)
-
-                            curl -X POST https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/sendMessage \\
-                                -d chat_id=1518575587 \\
-                                -d parse_mode=Markdown \\
-                                -d "text=✅ *Déploiement réussi* pour la branche ${BRANCH_NAME} du chatbot !\\n\\nAPI: '\${API_URL}'"
-                        """
-                    }
-                } catch (Exception e) {
-                    echo "Error in post/success: ${e.message}"
-                }
+                // Notify success
+                echo "Build succeeded!"
+                // Uncomment the line below to send a message to Telegram
+                // sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<CHAT_ID> -d text='Build succeeded!'"
             }
         }
-
         failure {
             script {
-                try {
-                    echo "Build failed!"
-                    withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
-                        sh """
-                            curl -X POST https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/sendMessage \\
-                                -d chat_id=1518575587 \\
-                                -d parse_mode=Markdown \\
-                                -d "text=❌ *Échec du déploiement* pour la branche ${BRANCH_NAME} du chatbot.\\n\\n[Voir les logs](${BUILD_URL}console)"
-                        """
-                    }
-                } catch (Exception e) {
-                    echo "Error in post/failure: ${e.message}"
-                }
+                // Notify failure
+                echo "Build failed!"
+                // Uncomment the line below to send a message to Telegram
+                // sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<CHAT_ID> -d text='Build failed!'"
             }
         }
     }
