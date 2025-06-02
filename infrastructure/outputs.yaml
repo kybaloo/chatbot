@@ -1,0 +1,29 @@
+###############################################################################
+Conditions:
+###############################################################################
+  DeployEC2: !Not [!Equals [!Ref EnvironmentName, "dev-local"]]
+  UseWebhook: !Not [!Equals [!Ref WebhookUrl, ""]]
+  UseCustomWebhook: !Not [!Equals [!Ref WebhookUrl, ""]]
+
+###############################################################################
+Outputs:
+###############################################################################
+  DynamoDBTableName:
+    Description: Nom de la table DynamoDB
+    Value: !Ref DynamoDBTable
+  ApiUrl:
+    Description: URL de l'API publique
+    Value:
+      Fn::Sub: 'https://${Api}.execute-api.${AWS::Region}.${AWS::URLSuffix}/'
+  EC2PublicIP:
+    Description: Adresse IP publique de l'instance EC2
+    Condition: DeployEC2
+    Value: !GetAtt EC2Instance.PublicIp
+  BotWebhookUrl:
+    Description: URL du webhook pour le bot Telegram
+    Condition: UseWebhook
+    Value: 
+      Fn::If:
+        - UseCustomWebhook
+        - !Ref WebhookUrl
+        - Fn::Sub: 'http://${EC2Instance.PublicIp}:8000/${TelegramBotToken}'
