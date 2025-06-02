@@ -194,9 +194,9 @@ pipeline {
             steps {
                 script {
                     echo "Testing the endpoint..."
-                    
-                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
-                        // Récupérer l'URL de l'API déployée                        sh """
+                      withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                        // Récupérer l'URL de l'API déployée
+                        sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
                                 --stack-name chatbot-stack-${BRANCH_NAME} \\
                                 --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
@@ -256,10 +256,10 @@ pipeline {
         success {
             node {
                 script {
-                    try {
-                        // Notify success
+                    try {                        // Notify success
                         echo "Build succeeded!"
-                        // Envoyer une notification dans un groupe Telegram dédié au CI/CD                        withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
+                        // Envoyer une notification dans un groupe Telegram dédié au CI/CD
+                        withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
                             sh """
                                 # Récupérer l'URL de l'API
                                 API_URL=\$(aws cloudformation describe-stacks \\
@@ -280,11 +280,11 @@ pipeline {
                     }
                 }
             }
-        }
-        failure {
+        }        failure {
             node {
                 script {
-                    try {                        // Notify failure
+                    try {
+                        // Notify failure
                         echo "Build failed!"
                         // Envoyer une notification dans un groupe Telegram dédié au CI/CD
                         withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
