@@ -147,26 +147,22 @@ pipeline {
     
      post {
         always {
-            script {
-                // Clean workspace
-                cleanWs()
-            }
+            echo "Cleaning workspace..."
+            cleanWs()
         }
         success {
-            script {
-                // Notify success
-                echo "Build succeeded!"
-                // Uncomment the line below to send a message to Telegram
-                // sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<CHAT_ID> -d text='Build succeeded!'"
-            }
+            echo "Build succeeded!"
+            // Si vous souhaitez activer les notifications Telegram, utilisez la syntaxe correcte
+            // withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'BOT_TOKEN')]) {
+            //     sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<VOTRE_CHAT_ID> -d text='Build du chatbot réussi !'"
+            // }
         }
         failure {
-            script {
-                // Notify failure
-                echo "Build failed!"
-                // Uncomment the line below to send a message to Telegram
-                // sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<CHAT_ID> -d text='Build failed!'"
-            }
+            echo "Build failed!"
+            // Si vous souhaitez activer les notifications Telegram, utilisez la syntaxe correcte
+            // withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'BOT_TOKEN')]) {
+            //     sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<VOTRE_CHAT_ID> -d text='Échec du build du chatbot !'"
+            // }
         }
     }
 }
