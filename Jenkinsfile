@@ -26,7 +26,9 @@ pipeline {
                 sh "echo Branch name ${BRANCH_NAME}"
                 sh "make venv && make install"
             }
-        }        stage('Environment variable injection'){
+        }
+        
+        stage('Environment variable injection'){
             steps {
                 script{
                     try {
@@ -225,12 +227,13 @@ pipeline {
                                     -H "Content-Type: application/json" \\
                                     -d "{\\"url\\":\\"\${WEBHOOK_URL}\\", \\"drop_pending_updates\\":true}"
                             fi
-                        """
-                    }
+                        """                    }
                 }
             }
         }
-    }    post {
+    }
+    
+    post {
         always {
             node(label: 'master') {
                 script {
@@ -254,7 +257,8 @@ pipeline {
         success {
             node(label: 'master') {
                 script {
-                    try {                        // Notify success
+                    try {
+                        // Notify success
                         echo "Build succeeded!"
                         // Envoyer une notification dans un groupe Telegram dédié au CI/CD
                         withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
@@ -276,9 +280,10 @@ pipeline {
                     } catch (Exception e) {
                         echo "Error in post/success: ${e.message}"
                     }
-                }
-            }
-        }        failure {
+                }            }
+        }
+        
+        failure {
             node(label: 'master') {
                 script {
                     try {
