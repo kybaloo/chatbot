@@ -16,6 +16,8 @@ pipeline {
         DYNAMO_TABLE = "chatbot-conversations-${BRANCH_NAME}"
         LOG_LEVEL = "INFO"
         ENV_NAME = "${BRANCH_NAME}"
+        ENABLE_TELEGRAM_BOT = "true"
+        CONVERSATION_TTL_DAYS = "30"
     }
 
     stages {
@@ -88,6 +90,11 @@ pipeline {
                             WEBHOOK_URL = "https://api.votre-domaine.com" // Remplacez par votre URL de production
                         } else if (BRANCH_NAME == 'preprod') {
                             WEBHOOK_URL = "https://preprod.votre-domaine.com" // Remplacez par votre URL de préproduction
+                        } else if (BRANCH_NAME == 'kybaloo') {
+                            // Pour un premier déploiement, l'URL sera vide puis sera mise à jour après obtention de l'URL API Gateway
+                            // Le bot fonctionnera en mode polling jusqu'à ce que le webhook soit configuré
+                            echo "Déploiement initial sur l'environnement kybaloo sans webhook configuré"
+                            // Le webhook sera automatiquement configuré dans l'étape 'Configure Webhook' après déploiement
                         }
                         
                         // Déploiement via CloudFormation
@@ -100,6 +107,9 @@ pipeline {
                                     MistralApiKey=${MISTRAL_API_KEY} \\
                                     TelegramBotToken=${TELEGRAM_BOT_TOKEN} \\
                                     WebhookUrl=${WEBHOOK_URL} \\
+                                    LogLevel=${LOG_LEVEL} \\
+                                    EnableTelegramBot=${ENABLE_TELEGRAM_BOT} \\
+                                    ConversationTTLDays=${CONVERSATION_TTL_DAYS} \\
                                 --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
                         """
                         
@@ -116,6 +126,40 @@ pipeline {
             }
         }
 
+        stage('Configure Webhook') {
+            steps {
+                script {
+                    echo "Configuring Telegram webhook..."
+                    
+                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                        // Récupérer l'URL de l'API déployée
+                        sh """
+                            API_URL=\$(aws cloudformation describe-stacks \\
+                                --stack-name chatbot-stack-${BRANCH_NAME} \\
+                                --query 'Stacks[0].Outputs[?OutputKey==\`ApiUrl\`].OutputValue' \\
+                                --output text)
+                            
+                            # Configurer le webhook Telegram avec l'URL de l'API et le chemin /webhook/telegram
+                            if [ -n "\${API_URL}" ]; then
+                                FULL_WEBHOOK_URL="\${API_URL}/webhook/telegram"
+                                echo "Setting webhook to: \${FULL_WEBHOOK_URL}"
+                                
+                                # Appeler l'API Telegram pour configurer le webhook
+                                curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \\
+                                    -H "Content-Type: application/json" \\
+                                    -d \"{\\"url\\":\\"\${FULL_WEBHOOK_URL}\\", \\"drop_pending_updates\\":true}\"
+                                
+                                # Vérifier si le webhook a été correctement configuré
+                                curl -X GET "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
+                            else
+                                echo "Failed to get API URL, webhook not configured"
+                            fi
+                        """
+                    }
+                }
+            }
+        }
+        
         stage('Test endpoint'){
             steps {
                 script {
