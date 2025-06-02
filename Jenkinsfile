@@ -196,7 +196,7 @@ pipeline {
                             if [[ "${BRANCH_NAME}" == "prod" || "${BRANCH_NAME}" == "preprod" ]]; then
                                 EC2_PUBLIC_IP=\$(aws cloudformation describe-stacks \\
                                     --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                    --query 'Stacks[0].Outputs[?OutputKey==\`EC2PublicIP\`].OutputValue' \\
+                                    --query "Stacks[0].Outputs[?OutputKey=='EC2PublicIP'].OutputValue" \\
                                     --output text)
                                     
                                 echo "Configuration du webhook Telegram sur l'instance EC2 \${EC2_PUBLIC_IP}"
