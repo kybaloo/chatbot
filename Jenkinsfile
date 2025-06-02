@@ -212,67 +212,73 @@ pipeline {
 
     post {
         always {
-            script {
-                try {
-                    // Clean up and generate reports
-                    echo "Generating test reports..."
-                    
-                    // Archive test results if they exist
-                    if (fileExists('test-results')) {
-                        archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
+            node {
+                script {
+                    try {
+                        // Clean up and generate reports
+                        echo "Generating test reports..."
+                        
+                        // Archive test results if they exist
+                        if (fileExists('test-results')) {
+                            archiveArtifacts artifacts: 'test-results/**/*', allowEmptyArchive: true
+                        }
+                        
+                        // Clean up resources if needed
+                        echo "Cleaning up resources..."
+                    } catch (Exception e) {
+                        echo "Error in post/always: ${e.message}"
                     }
-                    
-                    // Clean up resources if needed
-                    echo "Cleaning up resources..."
-                } catch (Exception e) {
-                    echo "Error in post/always: ${e.message}"
                 }
             }
         }
         success {
-            script {
-                try {
-                    // Notify success
-                    echo "Build succeeded!"
-                    // Envoyer une notification dans un groupe Telegram dédié au CI/CD
-                    withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
-                        sh """
-                            # Récupérer l'URL de l'API
-                            API_URL=\$(aws cloudformation describe-stacks \\
-                                --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --region ${AWS_REGION} \\
-                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
-                                --output text)
-                                
-                            # Envoyer la notification avec l'URL
-                            curl -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \\
-                                -d chat_id=<CHAT_ID_CI> \\
-                                -d parse_mode=Markdown \\
-                                -d text='✅ *Déploiement réussi* pour la branche `${BRANCH_NAME}` du chatbot !\\n\\nAPI: '\${API_URL}''
-                        """
+            node {
+                script {
+                    try {
+                        // Notify success
+                        echo "Build succeeded!"
+                        // Envoyer une notification dans un groupe Telegram dédié au CI/CD
+                        withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
+                            sh '''
+                                # Récupérer l'URL de l'API
+                                API_URL=$(aws cloudformation describe-stacks \
+                                    --stack-name chatbot-stack-${BRANCH_NAME} \
+                                    --region ${AWS_REGION} \
+                                    --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+                                    --output text)
+                                    
+                                # Envoyer la notification avec l'URL
+                                curl -X POST https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage \
+                                    -d chat_id=<CHAT_ID_CI> \
+                                    -d parse_mode=Markdown \
+                                    -d text="✅ *Déploiement réussi* pour la branche \`${BRANCH_NAME}\` du chatbot !\n\nAPI: '$API_URL'"
+                            '''
+                        }
+                    } catch (Exception e) {
+                        echo "Error in post/success: ${e.message}"
                     }
-                } catch (Exception e) {
-                    echo "Error in post/success: ${e.message}"
                 }
             }
         }
         failure {
-            script {
-                try {
-                    // Notify failure
-                    echo "Build failed!"
-                    // Envoyer une notification dans un groupe Telegram dédié au CI/CD
-                    withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
-                        sh """
-                            # Envoyer la notification avec le lien vers les logs
-                            curl -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \\
-                                -d chat_id=<CHAT_ID_CI> \\
-                                -d parse_mode=Markdown \\
-                                -d text='❌ *Échec du déploiement* pour la branche `${BRANCH_NAME}` du chatbot.\\n\\n[Voir les logs](\${BUILD_URL}console)'
-                        """
+            node {
+                script {
+                    try {
+                        // Notify failure
+                        echo "Build failed!"
+                        // Envoyer une notification dans un groupe Telegram dédié au CI/CD
+                        withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
+                            sh '''
+                                # Envoyer la notification avec le lien vers les logs
+                                curl -X POST https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage \
+                                    -d chat_id=<CHAT_ID_CI> \
+                                    -d parse_mode=Markdown \
+                                    -d text="❌ *Échec du déploiement* pour la branche \`${BRANCH_NAME}\` du chatbot.\n\n[Voir les logs](${BUILD_URL}console)"
+                            '''
+                        }
+                    } catch (Exception e) {
+                        echo "Error in post/failure: ${e.message}"
                     }
-                } catch (Exception e) {
-                    echo "Error in post/failure: ${e.message}"
                 }
             }
         }
