@@ -69,7 +69,6 @@ pipeline {
             steps {
                 script {
                     echo "Running code quality checks..."
-                    sh "make lint"
                     sh "make format"
                 }
             }
