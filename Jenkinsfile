@@ -1,3 +1,4 @@
+// filepath: d:\Projects\School\chatbot\Jenkinsfile
 pipeline {
     agent any
 
@@ -139,7 +140,7 @@ pipeline {
                                     ConversationTTLDays=${CONVERSATION_TTL_DAYS} \\
                                 --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
                         """
-                          // Récupérer l'URL de l'API déployée
+                        // Récupérer l'URL de l'API déployée
                         sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
                                 --stack-name chatbot-stack-${BRANCH_NAME} \\
@@ -160,7 +161,7 @@ pipeline {
             steps {
                 script {
                     echo "Configuring Telegram webhook..."
-                      withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
                         // Récupérer l'URL de l'API déployée
                         sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
@@ -196,7 +197,7 @@ pipeline {
             steps {
                 script {
                     echo "Testing the endpoint..."
-                      withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
                         // Récupérer l'URL de l'API déployée
                         sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
@@ -227,14 +228,16 @@ pipeline {
                                     -H "Content-Type: application/json" \\
                                     -d "{\\"url\\":\\"\${WEBHOOK_URL}\\", \\"drop_pending_updates\\":true}"
                             fi
-                        """                    }
+                        """
+                    }
                 }
             }
         }
     }
-      post {
+    
+    post {
         always {
-            node {
+            node(label: 'any') {
                 script {
                     try {
                         // Clean up and generate reports
@@ -252,8 +255,10 @@ pipeline {
                     }
                 }
             }
-        }        success {
-            node {
+        }
+        
+        success {
+            node(label: 'any') {
                 script {
                     try {
                         // Notify success
@@ -278,10 +283,12 @@ pipeline {
                     } catch (Exception e) {
                         echo "Error in post/success: ${e.message}"
                     }
-                }            }
+                }
+            }
         }
-          failure {
-            node {
+        
+        failure {
+            node(label: 'any') {
                 script {
                     try {
                         // Notify failure
