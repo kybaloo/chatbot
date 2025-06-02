@@ -1,4 +1,3 @@
-// filepath: d:\Projects\School\chatbot\Jenkinsfile
 pipeline {
     agent any
 
@@ -12,11 +11,11 @@ pipeline {
         AWS_REGION = 'eu-west-3' 
         TELEGRAM_BOT_TOKEN = credentials('telegram-bot-token')
         MISTRAL_API_KEY = credentials('mistral-api-key')
-        WEBHOOK_URL = ''
+        WEBHOOK_URL = 'https://4y9lvphtwh.execute-api.eu-west-3.amazonaws.com/webhook/telegram'
         AWS_CREDENTIALS = credentials('aws-credentials')
-        DYNAMO_TABLE = "chatbot-conversations-${BRANCH_NAME}"
+        DYNAMO_TABLE = "chatbot-conversations-kybaloo"
         LOG_LEVEL = "INFO"
-        ENV_NAME = "${BRANCH_NAME}"
+        ENV_NAME = "kybaloo"
         ENABLE_TELEGRAM_BOT = "true"
         CONVERSATION_TTL_DAYS = "30"
     }
@@ -113,18 +112,6 @@ pipeline {
                     // Configuration de l'environnement AWS
                     withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
                         
-                        // Définir la valeur du webhook URL selon l'environnement
-                        if (BRANCH_NAME == 'prod') {
-                            WEBHOOK_URL = "https://api.votre-domaine.com" // Remplacez par votre URL de production
-                        } else if (BRANCH_NAME == 'preprod') {
-                            WEBHOOK_URL = "https://preprod.votre-domaine.com" // Remplacez par votre URL de préproduction
-                        } else if (BRANCH_NAME == 'kybaloo') {
-                            // Pour un premier déploiement, l'URL sera vide puis sera mise à jour après obtention de l'URL API Gateway
-                            // Le bot fonctionnera en mode polling jusqu'à ce que le webhook soit configuré
-                            echo "Déploiement initial sur l'environnement kybaloo sans webhook configuré"
-                            // Le webhook sera automatiquement configuré dans l'étape 'Configure Webhook' après déploiement
-                        }
-                        
                         // Déploiement via CloudFormation
                         sh """
                             aws cloudformation deploy \\
@@ -151,83 +138,6 @@ pipeline {
                             # Mettre à jour l'environnement avec l'URL obtenue
                             export WEBHOOK_URL="\${API_URL}/webhook/telegram"
                             echo "WEBHOOK_URL=\${WEBHOOK_URL}"
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Configure Webhook') {
-            steps {
-                script {
-                    echo "Configuring Telegram webhook..."
-                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
-                        // Récupérer l'URL de l'API déployée
-                        sh """
-                            API_URL=\$(aws cloudformation describe-stacks \\
-                                --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
-                                --output text)
-                            
-                            # Configurer le webhook Telegram avec l'URL de l'API et le chemin /webhook/telegram
-                            if [ -n "\${API_URL}" ]; then
-                                FULL_WEBHOOK_URL="\${API_URL}/webhook/telegram"
-                                echo "Setting webhook to: \${FULL_WEBHOOK_URL}"
-                                
-                                # Appeler l'API Telegram pour configurer le webhook
-                                curl -X POST "https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/setWebhook" \\
-                                    -H "Content-Type: application/json" \\
-                                    -d "{\\"url\\":\\"\${FULL_WEBHOOK_URL}\\", \\"drop_pending_updates\\":true}"
-                                
-                                # Vérifier si le webhook a été correctement configuré
-                                curl -X GET "https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/getWebhookInfo"
-                                
-                                # Mettre à jour la variable d'environnement WEBHOOK_URL
-                                echo "Mise à jour de la variable WEBHOOK_URL avec: \${FULL_WEBHOOK_URL}"
-                            else
-                                echo "Failed to get API URL, webhook not configured"
-                            fi
-                        """
-                    }
-                }
-            }
-        }
-        
-        stage('Test endpoint'){
-            steps {
-                script {
-                    echo "Testing the endpoint..."
-                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
-                        // Récupérer l'URL de l'API déployée
-                        sh """
-                            API_URL=\$(aws cloudformation describe-stacks \\
-                                --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
-                                --output text)
-                            
-                            # Test de l'endpoint racine
-                            echo "Test de l'API à \${API_URL}"
-                            curl -s \${API_URL} | grep "msg"
-                            
-                            # Test de l'endpoint pour les conversations existantes
-                            echo "Test de récupération des conversations"
-                            curl -s "\${API_URL}/conversations/test-user" || echo "Endpoint conversations non disponible (OK)"
-                            
-                            # Test de l'endpoint de chat
-                            echo "Test de l'endpoint chat"
-                            curl -s "\${API_URL}/chat?question=Bonjour&user_id=test-user" || echo "Test de chat terminé"
-                            
-                            # Si on est en prod ou preprod, configurer le webhook Telegram
-                            if [[ "${BRANCH_NAME}" == "prod" || "${BRANCH_NAME}" == "preprod" || "${BRANCH_NAME}" == "kybaloo" ]]; then
-                                echo "Configuration du webhook Telegram pour l'environnement ${BRANCH_NAME}"
-                                
-                                # Configuration du webhook avec le nouveau chemin webhook/telegram
-                                WEBHOOK_URL="\${API_URL}/webhook/telegram"
-                                echo "Configuration du webhook Telegram: \${WEBHOOK_URL}"
-                                curl -s "https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/setWebhook" \\
-                                    -H "Content-Type: application/json" \\
-                                    -d "{\\"url\\":\\"\${WEBHOOK_URL}\\", \\"drop_pending_updates\\":true}"
-                            fi
                         """
                     }
                 }
@@ -275,7 +185,7 @@ pipeline {
                                     
                                 # Envoyer la notification avec l'URL
                                 curl -X POST https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/sendMessage \\
-                                    -d chat_id=<CHAT_ID_CI> \\
+                                    -d chat_id=1518575587 \\
                                     -d parse_mode=Markdown \\
                                     -d "text=✅ *Déploiement réussi* pour la branche ${BRANCH_NAME} du chatbot !\n\nAPI: '\${API_URL}'"
                             """
@@ -298,7 +208,7 @@ pipeline {
                             sh """
                                 # Envoyer la notification avec le lien vers les logs
                                 curl -X POST https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/sendMessage \\
-                                    -d chat_id=<CHAT_ID_CI> \\
+                                    -d chat_id=1518575587 \\
                                     -d parse_mode=Markdown \\
                                     -d "text=❌ *Échec du déploiement* pour la branche ${BRANCH_NAME} du chatbot.\n\n[Voir les logs](${BUILD_URL}console)"
                             """
