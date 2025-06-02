@@ -13,6 +13,44 @@ Parameters:
       - dev
       - preprod
       - prod
+  MistralApiKey:
+    Description: API Key for Mistral AI
+    Type: String
+    NoEcho: true
+  TelegramBotToken:
+    Description: Token for the Telegram Bot
+    Type: String
+    NoEcho: true
+  WebhookUrl:
+    Description: URL for Telegram webhook (production only)
+    Type: String
+    Default: ""
+  KeyPairName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+  DockerImageRepository:
+    Description: ECR Repository URL where Docker images are stored
+    Type: String
+    Default: "123456789012.dkr.ecr.eu-west-3.amazonaws.com"
+
+###############################################################################
+Mappings:
+###############################################################################
+  RegionMap:
+    eu-west-1:
+      AMI: ami-0694d931cee176e7d
+    eu-west-2:
+      AMI: ami-0505148c3266fb29b
+    eu-west-3:
+      AMI: ami-06d79c60d7454e2af
+    us-east-1:
+      AMI: ami-0261755bbcb8c4a84
+    us-east-2:
+      AMI: ami-0430580de6244e02e
+    us-west-1:
+      AMI: ami-0adcfd43b4efefa89
+    us-west-2:
+      AMI: ami-0c65adc9a5c1b5d7c
 
 ###############################################################################
 Resources:
@@ -20,24 +58,45 @@ Resources:
   DynamoDBTable:
     Type: "AWS::DynamoDB::Table"
     Properties:
-      TableName: !Sub "chatbot-dbtable-${EnvironmentName}"
+      TableName: !Sub "chatbot-conversations-${EnvironmentName}"
       AttributeDefinitions:
-        - AttributeName: "id"
+        - AttributeName: "PK"
+          AttributeType: "S"
+        - AttributeName: "SK"
           AttributeType: "S"
       KeySchema:
-        - AttributeName: "id"
+        - AttributeName: "PK"
           KeyType: "HASH"
+        - AttributeName: "SK"
+          KeyType: "RANGE"
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
+      TimeToLiveSpecification:
+        AttributeName: "ttl"
+        Enabled: true
 
   Function:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "chatbot-lambda-${EnvironmentName}"
       CodeUri: ../
-      Handler: src/main.handler
+      Handler: src/app.handler
       Runtime: python3.12
+      Environment:
+        Variables:
+          ENV_NAME: !Ref EnvironmentName
+          AWS_REGION_NAME: !Ref AWS::Region
+          DYNAMO_TABLE: !Ref DynamoDBTable
+          MISTRAL_API_KEY: !Ref MistralApiKey
+          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          WEBHOOK_URL: !Ref WebhookUrl
+          LOG_LEVEL: "INFO"
+          CONVERSATION_TTL_DAYS: "30"
+          ENABLE_TELEGRAM_BOT: "true"
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoDBTable
       Events:
         Api:
           Type: HttpApi
@@ -49,11 +108,118 @@ Resources:
     Properties:
       Name: !Sub "chatbot-apigateway-${EnvironmentName}"
 
+  # Instance EC2 pour exécuter le bot Telegram
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ChatBot EC2 instance
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          Description: Allow SSH access
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          Description: Allow HTTP access
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          Description: Allow HTTPS access
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          Description: Allow webhook access
 
-Outputs:
-  DynamoDBTableName:
-    Value: !Ref DynamoDBTable
-  ApiUrl:
-    Description: URL of your API
-    Value:
-      Fn::Sub: 'https://${Api}.execute-api.${AWS::Region}.${AWS::URLSuffix}/'
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      SecurityGroupIds:
+        - !GetAtt EC2SecurityGroup.GroupId
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          # Mise à jour du système
+          apt-get update && apt-get upgrade -y
+          
+          # Installation de Docker
+          apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+          add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          apt-get update
+          apt-get install -y docker-ce
+          
+          # Installation de Docker Compose
+          curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          chmod +x /usr/local/bin/docker-compose
+          
+          # Création du répertoire pour l'application
+          mkdir -p /opt/chatbot
+          
+          # Création du fichier .env
+          cat > /opt/chatbot/.env <<EOL
+          ENV_NAME=${EnvironmentName}
+          AWS_REGION_NAME=${AWS::Region}
+          DYNAMO_TABLE=${DynamoDBTable}
+          MISTRAL_API_KEY=${MistralApiKey}
+          TELEGRAM_BOT_TOKEN=${TelegramBotToken}
+          WEBHOOK_URL=${WebhookUrl}
+          CONVERSATION_TTL_DAYS=30
+          LOG_LEVEL=INFO
+          ENABLE_TELEGRAM_BOT=true
+          EOL
+          
+          # Création du fichier docker-compose.yml
+          cat > /opt/chatbot/docker-compose.yml <<EOL
+          version: '3'
+          services:
+            chatbot:
+              image: ${DockerImageRepository}/${EnvironmentName}-chatbot:latest
+              restart: always
+              ports:
+                - "80:80"
+                - "8000:8000"
+              volumes:
+                - ./.env:/code/.env
+              environment:
+                - ENV_NAME=${EnvironmentName}
+                - AWS_REGION_NAME=${AWS::Region}
+                - DYNAMO_TABLE=${DynamoDBTable}
+                - LOG_LEVEL=INFO
+                - ENABLE_TELEGRAM_BOT=true
+                - CONVERSATION_TTL_DAYS=30
+          EOL
+          
+          # Démarrage de l'application
+          cd /opt/chatbot
+          docker-compose pull
+          docker-compose up -d
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonECR-FullAccess
