@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     DYNAMO_TABLE: str = ""
     AWS_PROFILE: str = ""
     MISTRAL_API_KEY: str = ""
+    TELEGRAM_BOT_TOKEN: str = ""
+    WEBHOOK_URL: str = ""  # URL pour le webhook Telegram
+    CONVERSATION_TTL_DAYS: int = 30  # Durée de rétention des conversations en jours
 
     model_config = SettingsConfigDict(env_file=".env")
 
