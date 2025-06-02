@@ -1,6 +1,7 @@
 """
 Fonctions utilitaires diverses pour l'application
 """
+
 import json
 import uuid
 from datetime import datetime
@@ -54,20 +55,20 @@ def create_conversation_summary(conversation: Conversation) -> str:
     """
     if not conversation or not conversation.messages:
         return "Conversation vide"
-    
+
     # Récupérer le premier message utilisateur comme titre
     first_user_msg = None
     for msg in conversation.messages:
         if msg.role == "user":
             first_user_msg = msg.content
             break
-    
+
     title = truncate_text(first_user_msg or "Nouvelle conversation", 40)
     msg_count = len(conversation.messages)
-    
+
     # Formatage de la date
     date_str = format_timestamp(conversation.created_at, "%d/%m/%Y")
-    
+
     return f"{title} ({msg_count} messages, {date_str})"
 
 
@@ -81,4 +82,4 @@ async def run_async(func, *args, **kwargs):
 
 def batch_items(items: List[Any], batch_size: int = 25) -> List[List[Any]]:
     """Divise une liste d'éléments en lots"""
-    return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+    return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
