@@ -4,6 +4,9 @@ pydantic_settings
 boto3
 mangum
 httpx
-mistralai
-python-telegram-bot
+mistralai>=1.8.0
+python-telegram-bot>=22.0.0
 requests
+black
+flake8
+uvicorn
