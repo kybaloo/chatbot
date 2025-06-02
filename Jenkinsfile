@@ -117,7 +117,7 @@ pipeline {
                         sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
                                 --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --query 'Stacks[0].Outputs[?OutputKey==\`ApiUrl\`].OutputValue' \\
+                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
                                 --output text)
                             echo "API déployée à: \${API_URL}"
                         """
@@ -136,7 +136,7 @@ pipeline {
                         sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
                                 --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --query 'Stacks[0].Outputs[?OutputKey==\`ApiUrl\`].OutputValue' \\
+                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
                                 --output text)
                             
                             # Configurer le webhook Telegram avec l'URL de l'API et le chemin /webhook/telegram
@@ -170,7 +170,7 @@ pipeline {
                         sh """
                             API_URL=\$(aws cloudformation describe-stacks \\
                                 --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --query 'Stacks[0].Outputs[?OutputKey==\`ApiUrl\`].OutputValue' \\
+                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
                                 --output text)
                             
                             # Test de l'endpoint racine
