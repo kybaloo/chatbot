@@ -212,7 +212,7 @@ pipeline {
 
     post {
         always {
-            node {
+            node(label: 'any') {
                 script {
                     // Clean up and generate reports
                     echo "Generating test reports..."
@@ -228,7 +228,7 @@ pipeline {
             }
         }
         success {
-            node {
+            node(label: 'any') {
                 script {
                     withEnv(["BRANCH_NAME=${BRANCH_NAME}", "AWS_REGION=${AWS_REGION}"]) {
                         withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
@@ -255,7 +255,7 @@ pipeline {
             }
         }
         failure {
-            node {
+            node(label: 'any') {
                 script {
                     withEnv(["BRANCH_NAME=${BRANCH_NAME}", "BUILD_URL=${BUILD_URL}"]) {
                         withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN')]) {
