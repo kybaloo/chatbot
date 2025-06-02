@@ -230,11 +230,9 @@ pipeline {
                 }
             }
         }
-    }
-
-    post {
+    }    post {
         always {
-            node {
+            node(label: 'master') {
                 script {
                     try {
                         // Clean up and generate reports
@@ -254,7 +252,7 @@ pipeline {
             }
         }
         success {
-            node {
+            node(label: 'master') {
                 script {
                     try {                        // Notify success
                         echo "Build succeeded!"
@@ -281,7 +279,7 @@ pipeline {
                 }
             }
         }        failure {
-            node {
+            node(label: 'master') {
                 script {
                     try {
                         // Notify failure
