@@ -1,13 +1,14 @@
 """
 Configuration des tests pour le projet chatbot
 """
+
 import pytest
 import os
 import sys
 from unittest.mock import MagicMock
 
 # Ajouter le répertoire src au PYTHONPATH
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.models.conversation import Conversation, Message
 from src.models.user import User
@@ -73,9 +74,13 @@ def sample_conversation():
         updated_at="2025-06-01T10:05:00Z",
         messages=[
             Message(role="user", content="Bonjour!", timestamp="2025-06-01T10:00:00Z"),
-            Message(role="assistant", content="Bonjour! Comment puis-je vous aider?", timestamp="2025-06-01T10:00:05Z")
+            Message(
+                role="assistant",
+                content="Bonjour! Comment puis-je vous aider?",
+                timestamp="2025-06-01T10:00:05Z",
+            ),
         ],
-        model_id="mistral-medium"
+        model_id="mistral-medium",
     )
     return convo
 
@@ -89,5 +94,5 @@ def sample_user():
         first_name="Test",
         last_name="User",
         created_at="2025-06-01T10:00:00Z",
-        last_active="2025-06-01T10:05:00Z"
+        last_active="2025-06-01T10:05:00Z",
     )
