@@ -3,16 +3,14 @@ pipeline {
 
     options {
         ansiColor('xterm')
-    }
-
-    environment {
+    }    environment {
         // Define environment variables here
         BOT_NAME = 'telegram-chatbot'
         AWS_REGION = 'eu-west-3' 
         TELEGRAM_BOT_TOKEN = credentials('telegram-bot-token')
         MISTRAL_API_KEY = credentials('mistral-api-key')
         WEBHOOK_URL = 'https://4y9lvphtwh.execute-api.eu-west-3.amazonaws.com/webhook/telegram'
-        AWS_CREDENTIALS = credentials('aws-credentials')
+        // AWS_CREDENTIALS est géré par le plugin withAWS
         DYNAMO_TABLE = "chatbot-conversations-kybaloo"
         LOG_LEVEL = "INFO"
         ENV_NAME = "kybaloo"
@@ -110,7 +108,10 @@ pipeline {
                     echo "Deploying the project..."
                     
                     // Configuration de l'environnement AWS
-                    withAWS(credentials: 'aws-credentials', region: "${AWS_REGION}") {
+                    withCredentials([
+                        string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN'),
+                        string(credentialsId: 'mistral-api-key', variable: 'MISTRAL_API_KEY')
+                    ]) {
                         
                         // Déploiement via CloudFormation
                         sh """
@@ -144,25 +145,15 @@ pipeline {
             }
         }
     }
-    
-    // post {
-    //     always {
-    //         script {
-    //             echo "Cleaning workspace..."
-    //             cleanWs()
-    //         }
-    //     }
-    //     success {
-    //         script {
-    //             // Notify success
-    //             echo "Build succeeded!"
-    //         }
-    //     }
-    //     failure {
-    //         script {
-    //             // Notify failure
-    //             echo "Build failed!"
-    //         }
-    //     }
-    // }
+      post {
+        always {
+            echo "Fin de l'exécution du pipeline"
+        }
+        success {
+            echo "Build réussi ! L'URL du webhook est : ${WEBHOOK_URL}"
+        }
+        failure {
+            echo "Échec du build ! Consultez les logs pour plus d'informations."
+        }
+    }
 }
