@@ -1,6 +1,7 @@
 """
 Configuration et utilitaires de logging
 """
+
 import logging
 import sys
 from ..config.settings import env_vars
@@ -11,25 +12,22 @@ def setup_logger():
     # Déterminer le niveau de log à partir de la configuration
     log_level_str = env_vars.LOG_LEVEL.upper()
     log_level = getattr(logging, log_level_str, logging.INFO)
-    
+
     # Configuration de base
     logging.basicConfig(
         level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler("app.log")
-        ]
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("app.log")],
     )
-    
+
     # Réduire la verbosité des logs de certaines bibliothèques
     logging.getLogger("boto3").setLevel(logging.WARNING)
     logging.getLogger("botocore").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
-    
+
     logger = logging.getLogger("chatbot")
     logger.info(f"Logging configured with level {log_level_str}")
-    
+
     return logger
 
 
