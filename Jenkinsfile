@@ -153,10 +153,16 @@ pipeline {
             }
         }
         success {
-            echo "Build succeeded!"
+            script {
+                // Notify success
+                echo "Build succeeded!"
+            }
         }
         failure {
-            echo "Build failed!"
+            script {
+                // Notify failure
+                echo "Build failed!"
+            }
         }
     }
 }
