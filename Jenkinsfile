@@ -232,10 +232,9 @@ pipeline {
             }
         }
     }
-    
-    post {
+      post {
         always {
-            node(label: 'master') {
+            node {
                 script {
                     try {
                         // Clean up and generate reports
@@ -253,9 +252,8 @@ pipeline {
                     }
                 }
             }
-        }
-        success {
-            node(label: 'master') {
+        }        success {
+            node {
                 script {
                     try {
                         // Notify success
@@ -282,9 +280,8 @@ pipeline {
                     }
                 }            }
         }
-        
-        failure {
-            node(label: 'master') {
+          failure {
+            node {
                 script {
                     try {
                         // Notify failure
