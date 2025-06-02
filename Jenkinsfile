@@ -147,21 +147,35 @@ pipeline {
     
      post {
         always {
-            echo "Cleaning workspace..."
-            cleanWs()
+            script {
+                echo "Cleaning workspace..."
+                // Utilisation du nettoyage avec des commandes shell plutôt que cleanWs()
+                sh 'find . -type f -not -path "*/\\.*" -delete || true'
+                sh 'find . -type d -not -path "*/\\.*" -empty -delete || true'
+            }
         }
         success {
             echo "Build succeeded!"
-            // Si vous souhaitez activer les notifications Telegram, utilisez la syntaxe correcte
+            // Pour activer les notifications Telegram, décommentez et remplacez VOTRE_CHAT_ID
             // withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'BOT_TOKEN')]) {
-            //     sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<VOTRE_CHAT_ID> -d text='Build du chatbot réussi !'"
+            //     sh """
+            //         curl -s -X POST https://api.telegram.org/bot\${BOT_TOKEN}/sendMessage \
+            //         -d chat_id=VOTRE_CHAT_ID \
+            //         -d text='Build du chatbot réussi !' \
+            //         -d parse_mode=HTML
+            //     """
             // }
         }
         failure {
             echo "Build failed!"
-            // Si vous souhaitez activer les notifications Telegram, utilisez la syntaxe correcte
+            // Pour activer les notifications Telegram, décommentez et remplacez VOTRE_CHAT_ID
             // withCredentials([string(credentialsId: 'telegram-bot-token', variable: 'BOT_TOKEN')]) {
-            //     sh "curl -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage -d chat_id=<VOTRE_CHAT_ID> -d text='Échec du build du chatbot !'"
+            //     sh """
+            //         curl -s -X POST https://api.telegram.org/bot\${BOT_TOKEN}/sendMessage \
+            //         -d chat_id=VOTRE_CHAT_ID \
+            //         -d text='⚠️ Échec du build du chatbot ! Consultez les logs Jenkins pour plus de détails.' \
+            //         -d parse_mode=HTML
+            //     """
             // }
         }
     }
