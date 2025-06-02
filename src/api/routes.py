@@ -1,19 +1,20 @@
 """
 Routes FastAPI pour l'API REST
 """
-from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
+
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel
 
 from ..services.conversation_service import ConversationService
 from ..services.ai_service import AIService
-from ..models import Conversation
-from ..utils.logger import log_info, log_error
+from ..utils.logger import log_error
 
 
 # Modèles Pydantic pour l'API
 class ChatRequest(BaseModel):
     """Modèle pour une requête de chat"""
+
     question: str
     user_id: Optional[str] = None
     conversation_id: Optional[str] = None
@@ -21,6 +22,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     """Modèle pour une réponse de chat"""
+
     id: str
     question: str
     answer: str
@@ -29,6 +31,7 @@ class ChatResponse(BaseModel):
 
 class ConversationSummary(BaseModel):
     """Résumé d'une conversation pour les listes"""
+
     conversation_id: str
     created_at: str
     updated_at: str
@@ -38,6 +41,7 @@ class ConversationSummary(BaseModel):
 
 class ConversationDetail(BaseModel):
     """Détail complet d'une conversation"""
+
     conversation_id: str
     user_id: str
     username: Optional[str] = None
@@ -72,7 +76,7 @@ async def root():
 async def chat(
     request: ChatRequest,
     conversation_service: ConversationService = Depends(get_conversation_service),
-    ai_service: AIService = Depends(get_ai_service)
+    ai_service: AIService = Depends(get_ai_service),
 ):
     """
     Endpoint pour discuter avec le bot
@@ -86,42 +90,46 @@ async def chat(
                 conversation = await conversation_service.get_by_user_and_conversation(
                     request.user_id, request.conversation_id
                 )
-            
+
             if not conversation:
-                conversation = await conversation_service.create_new_conversation(request.user_id)
+                conversation = await conversation_service.create_new_conversation(
+                    request.user_id
+                )
                 request.conversation_id = conversation.conversation_id
-            
+
             # Ajouter le message utilisateur à la conversation
             conversation.add_message(role="user", content=request.question)
-        
+
         # Préparer les messages pour l'API Mistral
         messages = []
         if conversation and conversation.messages:
             messages = conversation.get_messages_for_ai()
         else:
             messages = [{"role": "user", "content": request.question}]
-        
+
         # Appeler l'API Mistral
         chat_response = await ai_service.chat_completion(messages)
-        
+
         # Extraire la réponse
         assistant_response = chat_response["content"]
-        
+
         # Si une conversation est en cours, ajouter la réponse et sauvegarder
         if conversation:
             conversation.add_message(role="assistant", content=assistant_response)
-            await conversation_service.update(conversation.conversation_id, conversation)
-        
+            await conversation_service.update(
+                conversation.conversation_id, conversation
+            )
+
         # Retourner la réponse
         result = ChatResponse(
             id=chat_response["id"],
             question=request.question,
             answer=assistant_response,
-            conversation_id=request.conversation_id
+            conversation_id=request.conversation_id,
         )
-        
+
         return result
-    
+
     except Exception as e:
         log_error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -130,12 +138,12 @@ async def chat(
 @router.get("/conversations/{user_id}", response_model=List[ConversationSummary])
 async def get_user_conversations(
     user_id: str,
-    conversation_service: ConversationService = Depends(get_conversation_service)
+    conversation_service: ConversationService = Depends(get_conversation_service),
 ):
     """Récupère toutes les conversations d'un utilisateur"""
     try:
         conversations = await conversation_service.get_by_user(user_id)
-        
+
         # Convertir les conversations en format pour l'API
         result = []
         for conv in conversations:
@@ -144,46 +152,58 @@ async def get_user_conversations(
             if not title and conv.messages:
                 for msg in conv.messages:
                     if msg.role == "user":
-                        title = msg.content[:50] + "..." if len(msg.content) > 50 else msg.content
+                        title = (
+                            msg.content[:50] + "..."
+                            if len(msg.content) > 50
+                            else msg.content
+                        )
                         break
-            
-            result.append(ConversationSummary(
-                conversation_id=conv.conversation_id,
-                created_at=conv.created_at.isoformat(),
-                updated_at=conv.updated_at.isoformat(),
-                message_count=len(conv.messages),
-                title=title
-            ))
-        
+
+            result.append(
+                ConversationSummary(
+                    conversation_id=conv.conversation_id,
+                    created_at=conv.created_at.isoformat(),
+                    updated_at=conv.updated_at.isoformat(),
+                    message_count=len(conv.messages),
+                    title=title,
+                )
+            )
+
         return result
-    
+
     except Exception as e:
         log_error(f"Error getting conversations for user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/conversations/{user_id}/{conversation_id}", response_model=ConversationDetail)
+@router.get(
+    "/conversations/{user_id}/{conversation_id}", response_model=ConversationDetail
+)
 async def get_conversation(
     user_id: str,
     conversation_id: str,
-    conversation_service: ConversationService = Depends(get_conversation_service)
+    conversation_service: ConversationService = Depends(get_conversation_service),
 ):
     """Récupère une conversation spécifique"""
     try:
-        conversation = await conversation_service.get_by_user_and_conversation(user_id, conversation_id)
-        
+        conversation = await conversation_service.get_by_user_and_conversation(
+            user_id, conversation_id
+        )
+
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        
+
         # Convertir les messages en format pour l'API
         messages = []
         for msg in conversation.messages:
-            messages.append({
-                "role": msg.role,
-                "content": msg.content,
-                "timestamp": msg.timestamp.isoformat()
-            })
-        
+            messages.append(
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat(),
+                }
+            )
+
         return ConversationDetail(
             conversation_id=conversation.conversation_id,
             user_id=conversation.user_id,
@@ -191,9 +211,9 @@ async def get_conversation(
             created_at=conversation.created_at.isoformat(),
             updated_at=conversation.updated_at.isoformat(),
             messages=messages,
-            metadata=conversation.metadata
+            metadata=conversation.metadata,
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -205,16 +225,18 @@ async def get_conversation(
 async def delete_conversation(
     user_id: str,
     conversation_id: str,
-    conversation_service: ConversationService = Depends(get_conversation_service)
+    conversation_service: ConversationService = Depends(get_conversation_service),
 ):
     """Supprime une conversation"""
     try:
-        result = await conversation_service.delete_by_user_and_conversation(user_id, conversation_id)
+        result = await conversation_service.delete_by_user_and_conversation(
+            user_id, conversation_id
+        )
         if not result:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        
+
         return {"status": "ok", "message": "Conversation deleted"}
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -227,17 +249,19 @@ async def update_conversation(
     user_id: str,
     conversation_id: str,
     title: str,
-    conversation_service: ConversationService = Depends(get_conversation_service)
+    conversation_service: ConversationService = Depends(get_conversation_service),
 ):
     """Met à jour les métadonnées d'une conversation (titre)"""
     try:
-        conversation = await conversation_service.rename_conversation(user_id, conversation_id, title)
-        
+        conversation = await conversation_service.rename_conversation(
+            user_id, conversation_id, title
+        )
+
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
-        
+
         return {"status": "ok", "message": "Conversation updated"}
-    
+
     except HTTPException:
         raise
     except Exception as e:
