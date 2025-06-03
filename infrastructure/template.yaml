@@ -25,9 +25,6 @@ Parameters:
     Description: URL for Telegram webhook (production only)
     Type: String
     Default: ""
-  KeyPairName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
-    Type: AWS::EC2::KeyPair::KeyName
   DockerImageRepository:
     Description: ECR Repository URL where Docker images are stored
     Type: String
