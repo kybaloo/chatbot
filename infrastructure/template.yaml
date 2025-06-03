@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
-Description: AWS CloudFormation Template for the Application
+Description: AWS CloudFormation Template for the Telegram Chatbot Application
 
 ###############################################################################
 Parameters:
@@ -25,10 +25,6 @@ Parameters:
     Description: URL for Telegram webhook (production only)
     Type: String
     Default: ""
-  DockerImageRepository:
-    Description: ECR Repository URL where Docker images are stored
-    Type: String
-    Default: "123456789012.dkr.ecr.eu-west-3.amazonaws.com"
 
 ###############################################################################
 Mappings:
@@ -80,6 +76,8 @@ Resources:
       CodeUri: ../
       Handler: src/app.handler
       Runtime: python3.12
+      MemorySize: 256
+      Timeout: 30
       Environment:
         Variables:
           ENV_NAME: !Ref EnvironmentName
@@ -99,23 +97,36 @@ Resources:
           Type: HttpApi
           Properties:
             ApiId: !Ref Api
+            Path: /webhook/telegram
+            Method: POST
+        RootApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref Api
+            Path: /
+            Method: GET
 
   Api:
     Type: AWS::Serverless::HttpApi
     Properties:
       Name: !Sub "chatbot-apigateway-${EnvironmentName}"
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
 
-  # Instance EC2 pour exécuter le bot Telegram
+  # Instance EC2 pour exécuter le bot Telegram (alternative à Lambda)
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ChatBot EC2 instance
       SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          Description: Allow SSH access
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
           FromPort: 80
@@ -139,7 +150,6 @@ Resources:
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
       SecurityGroupIds:
         - !GetAtt EC2SecurityGroup.GroupId
-      KeyName: !Ref KeyPairName
       IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
         Fn::Base64: !Sub |
@@ -158,11 +168,18 @@ Resources:
           curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
           chmod +x /usr/local/bin/docker-compose
           
+          # Installation de Git
+          apt-get install -y git
+          
           # Création du répertoire pour l'application
           mkdir -p /opt/chatbot
           
+          # Clonage du dépôt Git
+          git clone https://github.com/your-username/chatbot.git /opt/chatbot
+          cd /opt/chatbot
+          
           # Création du fichier .env
-          cat > /opt/chatbot/.env <<EOL
+          cat > .env <<EOL
           ENV_NAME=${EnvironmentName}
           AWS_REGION_NAME=${AWS::Region}
           DYNAMO_TABLE=${DynamoDBTable}
@@ -174,31 +191,15 @@ Resources:
           ENABLE_TELEGRAM_BOT=true
           EOL
           
-          # Création du fichier docker-compose.yml
-          cat > /opt/chatbot/docker-compose.yml <<EOL
-          version: '3'
-          services:
-            chatbot:
-              image: ${DockerImageRepository}/${EnvironmentName}-chatbot:latest
-              restart: always
-              ports:
-                - "80:80"
-                - "8000:8000"
-              volumes:
-                - ./.env:/code/.env
-              environment:
-                - ENV_NAME=${EnvironmentName}
-                - AWS_REGION_NAME=${AWS::Region}
-                - DYNAMO_TABLE=${DynamoDBTable}
-                - LOG_LEVEL=INFO
-                - ENABLE_TELEGRAM_BOT=true
-                - CONVERSATION_TTL_DAYS=30
-          EOL
-          
-          # Démarrage de l'application
-          cd /opt/chatbot
-          docker-compose pull
+          # Construction et démarrage avec Docker Compose
+          docker-compose build
           docker-compose up -d
+          
+          # Configuration du webhook Telegram
+          sleep 10
+          curl -X POST https://api.telegram.org/bot${TelegramBotToken}/setWebhook \
+            -H "Content-Type: application/json" \
+            -d "{\"url\":\"${WebhookUrl}\",\"drop_pending_updates\":true}"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -220,3 +221,22 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/AmazonECR-FullAccess
+
+###############################################################################
+Outputs:
+###############################################################################
+  ApiEndpoint:
+    Description: URL of the deployed API
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
+    
+  TableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref DynamoDBTable
+    
+  EC2PublicIP:
+    Description: Public IP address of EC2 instance
+    Value: !GetAtt EC2Instance.PublicIp
+    
+  EC2PublicDNS:
+    Description: Public DNS name of EC2 instance
+    Value: !GetAtt EC2Instance.PublicDnsName
