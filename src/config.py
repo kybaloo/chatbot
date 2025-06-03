@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     ENV_NAME: str = "local"
     AWS_REGION_NAME: str = ""
     DYNAMO_TABLE: str = ""
-    AWS_PROFILE: str = ""
     MISTRAL_API_KEY: str = ""
     TELEGRAM_BOT_TOKEN: str = ""
     WEBHOOK_URL: str = ""  # URL pour le webhook Telegram
