@@ -69,13 +69,13 @@ deploy:
 		exit 1; \
 	fi
 
-	sam deploy --resolve-s3 --template-file .aws-sam/build/template.yaml --stack-name chatbot-stack-${env} \
+	sam deploy --resolve-s3 --template-file .aws-sam/build/template.yaml --stack-name multi-stack-${env} \
          --capabilities CAPABILITY_IAM --region ${AWS_REGION} \
          --parameter-overrides \
-             EnvironmentName=${env} \
-             MistralApiKey=${MISTRAL_API_KEY} \
-             TelegramBotToken=${TELEGRAM_BOT_TOKEN} \
-             WebhookUrl=${WEBHOOK_URL} \
+         ParameterKey=EnvironmentName,ParameterValue=${env} \
+         ParameterKey=TelegramBotToken,ParameterValue=${TELEGRAM_BOT_TOKEN} \
+         ParameterKey=MistralApiKey,ParameterValue=${MISTRAL_API_KEY} \
+         ParameterKey=TelegramWebhookUrl,ParameterValue=${TELEGRAM_WEBHOOK_URL} \
          --no-fail-on-empty-changeset
 
 
