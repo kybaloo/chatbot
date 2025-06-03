@@ -107,6 +107,21 @@ class ConversationService(BaseService[Conversation]):
         )
         return await self.create(conversation)
 
+    def create_temporary_conversation(
+        self, user_id: str, username: Optional[str] = None
+    ) -> Conversation:
+        """
+        Crée une conversation temporaire en mémoire (sans sauvegarde)
+        Utilisée quand le stockage n'est pas disponible
+        """
+        return Conversation(
+            user_id=user_id,
+            username=username,
+            conversation_id=str(uuid4()),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+
     async def update(self, id: str, entity: Conversation) -> Optional[Conversation]:
         """Met à jour une conversation existante"""
         if not self.repository:
@@ -214,3 +229,7 @@ class ConversationService(BaseService[Conversation]):
             history.insert(0, f"... et {remaining} autres messages précédents ...")
 
         return "\n".join(history)
+
+    def is_storage_available(self) -> bool:
+        """Vérifie si le stockage est disponible"""
+        return self.storage_available and self.repository is not None
