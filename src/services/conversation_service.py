@@ -21,7 +21,34 @@ class ConversationService(BaseService[Conversation]):
     def __init__(self, repository: Optional[ConversationRepository] = None):
         """Initialisation du service avec son repository"""
         self.logger = logging.getLogger(__name__)
-        self.repository = repository or ConversationRepository()
+        self.storage_available = True
+        
+        try:
+            self.repository = repository or ConversationRepository()
+            # Test de connectivité pour vérifier si le stockage est disponible
+            # On ne peut pas faire de test simple ici car DynamoDB nécessite des credentials
+            # Le test se fera lors de la première opération
+        except Exception as e:
+            self.logger.warning(f"Repository initialization failed: {str(e)}. Running in memory-only mode.")
+            self.storage_available = False
+            self.repository = None
+
+    async def _safe_repository_operation(self, operation, *args, **kwargs):
+        """
+        Exécute une opération sur le repository en gérant les erreurs de manière gracieuse
+        Retourne None si le stockage n'est pas disponible
+        """
+        if not self.storage_available or not self.repository:
+            self.logger.debug("Storage not available, skipping repository operation")
+            return None
+            
+        try:
+            return await operation(*args, **kwargs)
+        except Exception as e:
+            self.logger.warning(f"Repository operation failed: {str(e)}. Continuing without storage.")
+            # Marquer le stockage comme indisponible pour les opérations futures
+            self.storage_available = False
+            return None
 
     async def get(self, id: str) -> Optional[Conversation]:
         """Récupère une conversation par son ID (non implémenté)"""
@@ -33,8 +60,10 @@ class ConversationService(BaseService[Conversation]):
         self, user_id: str, conversation_id: str
     ) -> Optional[Conversation]:
         """Récupère une conversation spécifique d'un utilisateur"""
-        return await self.repository.get_by_user_and_conversation(
-            user_id, conversation_id
+        if not self.repository:
+            return None
+        return await self._safe_repository_operation(
+            self.repository.get_by_user_and_conversation, user_id, conversation_id
         )
 
     async def get_all(self) -> List[Conversation]:
@@ -45,11 +74,25 @@ class ConversationService(BaseService[Conversation]):
 
     async def get_by_user(self, user_id: str) -> List[Conversation]:
         """Récupère toutes les conversations d'un utilisateur"""
-        return await self.repository.get_by_user(user_id)
+        if not self.repository:
+            return []
+        result = await self._safe_repository_operation(
+            self.repository.get_by_user, user_id
+        )
+        return result if result is not None else []
 
     async def create(self, entity: Conversation) -> Conversation:
         """Crée une nouvelle conversation"""
-        return await self.repository.create(entity)
+        if not self.repository:
+            # Retourner l'entité telle quelle si pas de stockage
+            self.logger.debug("No storage available, returning conversation without saving")
+            return entity
+        
+        result = await self._safe_repository_operation(
+            self.repository.create, entity
+        )
+        # Si la sauvegarde échoue, retourner quand même l'entité
+        return result if result is not None else entity
 
     async def create_new_conversation(
         self, user_id: str, username: Optional[str] = None
@@ -66,7 +109,16 @@ class ConversationService(BaseService[Conversation]):
 
     async def update(self, id: str, entity: Conversation) -> Optional[Conversation]:
         """Met à jour une conversation existante"""
-        return await self.repository.update(id, entity)
+        if not self.repository:
+            # Retourner l'entité telle quelle si pas de stockage
+            self.logger.debug("No storage available, returning conversation without updating")
+            return entity
+            
+        result = await self._safe_repository_operation(
+            self.repository.update, id, entity
+        )
+        # Si la mise à jour échoue, retourner quand même l'entité
+        return result if result is not None else entity
 
     async def delete(self, id: str) -> bool:
         """Supprime une conversation par son ID (non implémenté)"""
@@ -78,9 +130,14 @@ class ConversationService(BaseService[Conversation]):
         self, user_id: str, conversation_id: str
     ) -> bool:
         """Supprime une conversation spécifique d'un utilisateur"""
-        return await self.repository.delete_by_user_and_conversation(
-            user_id, conversation_id
+        if not self.repository:
+            self.logger.debug("No storage available, cannot delete conversation")
+            return False
+            
+        result = await self._safe_repository_operation(
+            self.repository.delete_by_user_and_conversation, user_id, conversation_id
         )
+        return result if result is not None else False
 
     async def add_message(
         self, conversation: Conversation, role: str, content: str
@@ -111,8 +168,8 @@ class ConversationService(BaseService[Conversation]):
         conversation.metadata["archived_at"] = datetime.now().isoformat()
 
         # Mettre à jour la conversation
-        await self.update(conversation_id, conversation)
-        return True
+        result = await self.update(conversation_id, conversation)
+        return result is not None
 
     async def rename_conversation(
         self, user_id: str, conversation_id: str, new_title: str
