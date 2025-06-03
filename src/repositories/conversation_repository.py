@@ -23,13 +23,25 @@ class ConversationRepository(BaseRepository[Conversation]):
         """Initialisation du repository avec connexion à DynamoDB"""
         self.logger = logging.getLogger(__name__)
 
-        # Utiliser un profil si spécifié, sinon utiliser les credentials par défaut
-        if env_vars.AWS_PROFILE:
-            session = boto3.Session(profile_name=env_vars.AWS_PROFILE)
-            self.dynamodb = session.resource(
-                "dynamodb", region_name=env_vars.AWS_REGION_NAME
+        # Utiliser les credentials par défaut sans profil AWS
+        try:
+            # Forcer l'utilisation des credentials par défaut sans profil
+            import os
+            # Temporairement supprimer AWS_PROFILE si défini
+            old_profile = os.environ.pop('AWS_PROFILE', None)
+            
+            self.dynamodb = boto3.resource(
+                "dynamodb", 
+                region_name=env_vars.AWS_REGION_NAME
             )
-        else:
+            
+            # Restaurer AWS_PROFILE si c'était défini
+            if old_profile:
+                os.environ['AWS_PROFILE'] = old_profile
+                
+        except Exception as e:
+            self.logger.error(f"Erreur lors de l'initialisation de la session AWS: {str(e)}")
+            # Fallback - utiliser la configuration par défaut
             self.dynamodb = boto3.resource(
                 "dynamodb", region_name=env_vars.AWS_REGION_NAME
             )
@@ -157,10 +169,11 @@ class ConversationRepository(BaseRepository[Conversation]):
         try:
             item = self._convert_to_item(entity)
             self.table.put_item(Item=item)
+            self.logger.info(f"Successfully created conversation {entity.conversation_id} for user {entity.user_id}")
             return entity
         except Exception as e:
             self.logger.error(f"Error creating conversation: {str(e)}")
-            return None
+            raise Exception(f"Failed to create conversation: {str(e)}")
 
     async def update(self, id: str, entity: Conversation) -> Optional[Conversation]:
         """Met à jour une conversation existante"""
