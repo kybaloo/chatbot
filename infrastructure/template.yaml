@@ -21,7 +21,7 @@ Parameters:
     Description: Token for the Telegram Bot
     Type: String
     NoEcho: true
-  WebhookUrl:
+  TelegramWebhookUrl:
     Description: URL for Telegram webhook (production only)
     Type: String
     Default: ""
@@ -63,7 +63,6 @@ Resources:
           - "X-Api-Key"
           - "X-Amz-Security-Token"
           - "X-Amz-User-Agent"
-
   Function:
     Type: AWS::Serverless::Function
     Properties:
@@ -74,8 +73,7 @@ Resources:
       Environment:
         Variables:
           ENV_NAME: !Ref EnvironmentName
-          DYNAMO_TABLE: !Ref DynamoDBTable
-          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+          DYNAMO_TABLE: !Ref DynamoDBTable          TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
           MISTRAL_API_KEY: !Ref MistralApiKey
           TELEGRAM_WEBHOOK_URL: !Ref TelegramWebhookUrl
           TELEGRAM_WEBHOOK_PATH: "/telegram/webhook"
@@ -110,7 +108,7 @@ Outputs:
   ApiUrl:
     Description: "API Gateway endpoint URL"
     Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/"
-  WebhookUrl:
+  TelegramWebhookUrl:
     Description: "Telegram Webhook URL"
     Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/telegram/webhook"
   DynamoDBTableName:
