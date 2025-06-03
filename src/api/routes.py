@@ -72,6 +72,23 @@ async def root():
     return {"status": "ok", "message": "Hello World"}
 
 
+@router.get("/health")
+async def health_check(
+    conversation_service: ConversationService = Depends(get_conversation_service),
+    ai_service: AIService = Depends(get_ai_service),
+):
+    """Endpoint pour vérifier l'état des services"""
+    return {
+        "status": "ok",
+        "services": {
+            "api": "available",
+            "ai_service": "available",  # On assume qu'il est disponible s'il n'y a pas d'erreur
+            "storage": "available" if conversation_service.is_storage_available() else "unavailable"
+        },
+        "message": "Chat is available" + (" (conversations will not be saved)" if not conversation_service.is_storage_available() else "")
+    }
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -80,11 +97,14 @@ async def chat(
 ):
     """
     Endpoint pour discuter avec le bot
-    Si user_id et conversation_id sont fournis, la conversation sera sauvegardée
+    Si user_id et conversation_id sont fournis, la conversation sera sauvegardée (si possible)
+    Le chat fonctionne même si la sauvegarde échoue
     """
     try:
         # Récupérer ou créer une conversation si user_id est fourni
         conversation = None
+        storage_failed = False
+        
         if request.user_id:
             if request.conversation_id:
                 conversation = await conversation_service.get_by_user_and_conversation(
@@ -92,10 +112,25 @@ async def chat(
                 )
 
             if not conversation:
-                conversation = await conversation_service.create_new_conversation(
-                    request.user_id
-                )
-                request.conversation_id = conversation.conversation_id
+                if conversation_service.is_storage_available():
+                    # Essayer de créer une conversation persistante
+                    conversation = await conversation_service.create_new_conversation(
+                        request.user_id
+                    )
+                    # Vérifier si la création a vraiment réussi
+                    if conversation and conversation.conversation_id:
+                        request.conversation_id = conversation.conversation_id
+                    else:
+                        storage_failed = True
+                else:
+                    storage_failed = True
+                
+                # Si le stockage a échoué, créer une conversation temporaire
+                if storage_failed:
+                    conversation = conversation_service.create_temporary_conversation(
+                        request.user_id
+                    )
+                    request.conversation_id = conversation.conversation_id
 
             # Ajouter le message utilisateur à la conversation
             conversation.add_message(role="user", content=request.question)
@@ -113,12 +148,20 @@ async def chat(
         # Extraire la réponse
         assistant_response = chat_response["content"]
 
-        # Si une conversation est en cours, ajouter la réponse et sauvegarder
+        # Si une conversation est en cours, ajouter la réponse et tenter de sauvegarder
         if conversation:
             conversation.add_message(role="assistant", content=assistant_response)
-            await conversation_service.update(
-                conversation.conversation_id, conversation
-            )
+            
+            # Essayer de sauvegarder seulement si le stockage est disponible
+            if conversation_service.is_storage_available() and not storage_failed:
+                try:
+                    await conversation_service.update(
+                        conversation.conversation_id, conversation
+                    )
+                except Exception as e:
+                    # Log l'erreur mais continue le traitement
+                    log_error(f"Failed to save conversation: {str(e)}", exc_info=True)
+                    storage_failed = True
 
         # Retourner la réponse
         result = ChatResponse(
@@ -131,7 +174,31 @@ async def chat(
         return result
 
     except Exception as e:
+        # Log l'erreur mais essaie de fournir une réponse utile
         log_error(f"Error in chat endpoint: {str(e)}", exc_info=True)
+        
+        # Si c'est une erreur liée au stockage mais que l'IA fonctionne, 
+        # on peut essayer de continuer sans sauvegarde
+        if "credentials" in str(e).lower() or "dynamodb" in str(e).lower():
+            try:
+                # Essayer de répondre sans sauvegarde
+                messages = [{"role": "user", "content": request.question}]
+                chat_response = await ai_service.chat_completion(messages)
+                
+                return ChatResponse(
+                    id=chat_response["id"],
+                    question=request.question,
+                    answer=chat_response["content"],
+                    conversation_id=None,  # Pas de conversation sauvegardée
+                )
+            except Exception as ai_error:
+                log_error(f"AI service also failed: {str(ai_error)}", exc_info=True)
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Both storage and AI services are unavailable"
+                )
+        
+        # Pour les autres types d'erreurs, retourner l'erreur
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -142,6 +209,11 @@ async def get_user_conversations(
 ):
     """Récupère toutes les conversations d'un utilisateur"""
     try:
+        # Vérifier si le stockage est disponible
+        if not conversation_service.is_storage_available():
+            # Retourner une liste vide si pas de stockage
+            return []
+            
         conversations = await conversation_service.get_by_user(user_id)
 
         # Convertir les conversations en format pour l'API
@@ -173,6 +245,9 @@ async def get_user_conversations(
 
     except Exception as e:
         log_error(f"Error getting conversations for user {user_id}: {str(e)}")
+        # Si c'est une erreur de stockage, retourner une liste vide plutôt qu'une erreur
+        if "credentials" in str(e).lower() or "dynamodb" in str(e).lower():
+            return []
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -186,6 +261,13 @@ async def get_conversation(
 ):
     """Récupère une conversation spécifique"""
     try:
+        # Vérifier si le stockage est disponible
+        if not conversation_service.is_storage_available():
+            raise HTTPException(
+                status_code=503, 
+                detail="Storage service unavailable. Conversations are not persisted."
+            )
+            
         conversation = await conversation_service.get_by_user_and_conversation(
             user_id, conversation_id
         )
@@ -218,6 +300,12 @@ async def get_conversation(
         raise
     except Exception as e:
         log_error(f"Error getting conversation {conversation_id}: {str(e)}")
+        # Si c'est une erreur de stockage, retourner une erreur de service non disponible
+        if "credentials" in str(e).lower() or "dynamodb" in str(e).lower():
+            raise HTTPException(
+                status_code=503, 
+                detail="Storage service unavailable. Conversations are not persisted."
+            )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -229,6 +317,13 @@ async def delete_conversation(
 ):
     """Supprime une conversation"""
     try:
+        # Vérifier si le stockage est disponible
+        if not conversation_service.is_storage_available():
+            raise HTTPException(
+                status_code=503, 
+                detail="Storage service unavailable. Cannot delete conversations."
+            )
+            
         result = await conversation_service.delete_by_user_and_conversation(
             user_id, conversation_id
         )
@@ -241,6 +336,12 @@ async def delete_conversation(
         raise
     except Exception as e:
         log_error(f"Error deleting conversation {conversation_id}: {str(e)}")
+        # Si c'est une erreur de stockage, retourner une erreur de service non disponible
+        if "credentials" in str(e).lower() or "dynamodb" in str(e).lower():
+            raise HTTPException(
+                status_code=503, 
+                detail="Storage service unavailable. Cannot delete conversations."
+            )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -253,6 +354,13 @@ async def update_conversation(
 ):
     """Met à jour les métadonnées d'une conversation (titre)"""
     try:
+        # Vérifier si le stockage est disponible
+        if not conversation_service.is_storage_available():
+            raise HTTPException(
+                status_code=503, 
+                detail="Storage service unavailable. Cannot update conversations."
+            )
+            
         conversation = await conversation_service.rename_conversation(
             user_id, conversation_id, title
         )
@@ -266,4 +374,10 @@ async def update_conversation(
         raise
     except Exception as e:
         log_error(f"Error updating conversation {conversation_id}: {str(e)}")
+        # Si c'est une erreur de stockage, retourner une erreur de service non disponible
+        if "credentials" in str(e).lower() or "dynamodb" in str(e).lower():
+            raise HTTPException(
+                status_code=503, 
+                detail="Storage service unavailable. Cannot update conversations."
+            )
         raise HTTPException(status_code=500, detail=str(e))
