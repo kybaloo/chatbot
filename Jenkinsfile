@@ -103,43 +103,18 @@ pipeline {
         }
 
         stage('Deploy') {
-            steps {
+           steps {
                 script {
+                    // Add your deployment commands here
                     echo "Deploying the project..."
-                    
-                    // Configuration de l'environnement AWS
                     withCredentials([
                         string(credentialsId: 'telegram-bot-token', variable: 'TELEGRAM_BOT_TOKEN'),
                         string(credentialsId: 'mistral-api-key', variable: 'MISTRAL_API_KEY')
                     ]) {
-                        
-                        // Déploiement via CloudFormation
                         sh """
-                            aws cloudformation deploy \\
-                                --template-file infrastructure/template.yaml \\
-                                --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --region ${AWS_REGION} \\
-                                --parameter-overrides \\
-                                    EnvironmentName=${BRANCH_NAME} \\
-                                    MistralApiKey=${MISTRAL_API_KEY} \\
-                                    TelegramBotToken=${TELEGRAM_BOT_TOKEN} \\
-                                    WebhookUrl=${WEBHOOK_URL} \\
-                                    LogLevel=${LOG_LEVEL} \\
-                                    EnableTelegramBot=${ENABLE_TELEGRAM_BOT} \\
-                                    ConversationTTLDays=${CONVERSATION_TTL_DAYS} \\
-                                --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
-                        """                        // Récupérer l'URL de l'API déployée
-                        sh """
-                            API_URL=\$(aws cloudformation describe-stacks \\
-                                --stack-name chatbot-stack-${BRANCH_NAME} \\
-                                --region ${AWS_REGION} \\
-                                --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \\
-                                --output text)
-                            echo "API déployée à: \${API_URL}"
-                            
-                            # Mettre à jour l'environnement avec l'URL obtenue
-                            export WEBHOOK_URL="\${API_URL}/webhook/telegram"
-                            echo "WEBHOOK_URL=\${WEBHOOK_URL}"
+                            make deploy env=${BRANCH_NAME} \
+                            TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN} \
+                            MISTRAL_API_KEY=${MISTRAL_API_KEY}
                         """
                     }
                 }
