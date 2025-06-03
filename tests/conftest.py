@@ -16,13 +16,13 @@ from src.models.ai_model import AIModel, PREDEFINED_MODELS
 from src.repositories.conversation_repository import ConversationRepository
 from src.services.conversation_service import ConversationService
 from src.services.ai_service import AIService
-from src.config.settings import EnvVars
+from src.config.settings import Settings
 
 
 @pytest.fixture
 def mock_env_vars():
     """Fixture qui fournit une configuration factice pour les tests"""
-    mock_config = MagicMock(spec=EnvVars)
+    mock_config = MagicMock(spec=Settings)
     mock_config.DYNAMO_TABLE = "test-table"
     mock_config.MISTRAL_API_KEY = "test-api-key"
     mock_config.AWS_REGION_NAME = "us-east-1"
