@@ -26,24 +26,6 @@ Parameters:
     Type: String
     Default: ""
 
-###############################################################################
-Mappings:
-###############################################################################
-  RegionMap:
-    eu-west-1:
-      AMI: ami-0694d931cee176e7d
-    eu-west-2:
-      AMI: ami-0505148c3266fb29b
-    eu-west-3:
-      AMI: ami-06d79c60d7454e2af
-    us-east-1:
-      AMI: ami-0261755bbcb8c4a84
-    us-east-2:
-      AMI: ami-0430580de6244e02e
-    us-west-1:
-      AMI: ami-0adcfd43b4efefa89
-    us-west-2:
-      AMI: ami-0c65adc9a5c1b5d7c
 
 ###############################################################################
 Resources:
@@ -51,192 +33,86 @@ Resources:
   DynamoDBTable:
     Type: "AWS::DynamoDB::Table"
     Properties:
-      TableName: !Sub "chatbot-conversations-${EnvironmentName}"
+      TableName: !Sub "chatbot-dbtable-${EnvironmentName}"
       AttributeDefinitions:
-        - AttributeName: "PK"
-          AttributeType: "S"
-        - AttributeName: "SK"
+        - AttributeName: "id"
           AttributeType: "S"
       KeySchema:
-        - AttributeName: "PK"
+        - AttributeName: "id"
           KeyType: "HASH"
-        - AttributeName: "SK"
-          KeyType: "RANGE"
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
-      TimeToLiveSpecification:
-        AttributeName: "ttl"
-        Enabled: true
+
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: !Sub "chatbot-apigateway-${EnvironmentName}"
+      FailOnWarnings: true
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowMethods:
+          - "GET"
+          - "POST"
+          - "OPTIONS"
+        AllowHeaders:
+          - "Content-Type"
+          - "X-Amz-Date"
+          - "Authorization"
+          - "X-Api-Key"
+          - "X-Amz-Security-Token"
+          - "X-Amz-User-Agent"
 
   Function:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "chatbot-lambda-${EnvironmentName}"
       CodeUri: ../
-      Handler: src/app.handler
+      Handler: src/main.handler
       Runtime: python3.12
-      MemorySize: 256
-      Timeout: 30
       Environment:
         Variables:
           ENV_NAME: !Ref EnvironmentName
-          AWS_REGION_NAME: !Ref AWS::Region
           DYNAMO_TABLE: !Ref DynamoDBTable
-          MISTRAL_API_KEY: !Ref MistralApiKey
           TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
-          WEBHOOK_URL: !Ref WebhookUrl
-          LOG_LEVEL: "INFO"
-          CONVERSATION_TTL_DAYS: "30"
-          ENABLE_TELEGRAM_BOT: "true"
+          MISTRAL_API_KEY: !Ref MistralApiKey
+          TELEGRAM_WEBHOOK_URL: !Ref TelegramWebhookUrl
+          TELEGRAM_WEBHOOK_PATH: "/telegram/webhook"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref DynamoDBTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:DeleteItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:BatchGetItem
+                - dynamodb:DescribeTable
+                - dynamodb:ConditionCheckItem
+              Resource:
+                - !GetAtt DynamoDBTable.Arn
+                - !Sub "${DynamoDBTable.Arn}/index/*"
       Events:
-        Api:
+        ApiEvent:
           Type: HttpApi
           Properties:
             ApiId: !Ref Api
-            Path: /webhook/telegram
-            Method: POST
-        RootApi:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref Api
-            Path: /
-            Method: GET
+            Path: /{proxy+}
+            Method: ANY
 
-  Api:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      Name: !Sub "chatbot-apigateway-${EnvironmentName}"
-      CorsConfiguration:
-        AllowOrigins:
-          - '*'
-        AllowHeaders:
-          - Content-Type
-          - Authorization
-        AllowMethods:
-          - GET
-          - POST
-          - OPTIONS
 
-  # Instance EC2 pour exécuter le bot Telegram (alternative à Lambda)
-  EC2SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for ChatBot EC2 instance
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          Description: Allow HTTP access
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          Description: Allow HTTPS access
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 8000
-          ToPort: 8000
-          Description: Allow webhook access
-
-  EC2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t2.micro
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      SecurityGroupIds:
-        - !GetAtt EC2SecurityGroup.GroupId
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          # Mise à jour du système
-          apt-get update && apt-get upgrade -y
-          
-          # Installation de Docker
-          apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-          add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-          apt-get update
-          apt-get install -y docker-ce
-          
-          # Installation de Docker Compose
-          curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          chmod +x /usr/local/bin/docker-compose
-          
-          # Installation de Git
-          apt-get install -y git
-          
-          # Création du répertoire pour l'application
-          mkdir -p /opt/chatbot
-          
-          # Clonage du dépôt Git
-          git clone https://github.com/your-username/chatbot.git /opt/chatbot
-          cd /opt/chatbot
-          
-          # Création du fichier .env
-          cat > .env <<EOL
-          ENV_NAME=${EnvironmentName}
-          AWS_REGION_NAME=${AWS::Region}
-          DYNAMO_TABLE=${DynamoDBTable}
-          MISTRAL_API_KEY=${MistralApiKey}
-          TELEGRAM_BOT_TOKEN=${TelegramBotToken}
-          WEBHOOK_URL=${WebhookUrl}
-          CONVERSATION_TTL_DAYS=30
-          LOG_LEVEL=INFO
-          ENABLE_TELEGRAM_BOT=true
-          EOL
-          
-          # Construction et démarrage avec Docker Compose
-          docker-compose build
-          docker-compose up -d
-          
-          # Configuration du webhook Telegram
-          sleep 10
-          curl -X POST https://api.telegram.org/bot${TelegramBotToken}/setWebhook \
-            -H "Content-Type: application/json" \
-            -d "{\"url\":\"${WebhookUrl}\",\"drop_pending_updates\":true}"
-
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Path: /
-      Roles:
-        - !Ref EC2Role
-
-  EC2Role:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
-        - arn:aws:iam::aws:policy/AmazonECR-FullAccess
-
-###############################################################################
 Outputs:
-###############################################################################
-  ApiEndpoint:
-    Description: URL of the deployed API
-    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com"
-    
-  TableName:
-    Description: Name of the DynamoDB table
+  ApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/"
+  WebhookUrl:
+    Description: "Telegram Webhook URL"
+    Value: !Sub "https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/telegram/webhook"
+  DynamoDBTableName:
+    Description: "DynamoDB Table Name"
     Value: !Ref DynamoDBTable
-    
-  EC2PublicIP:
-    Description: Public IP address of EC2 instance
-    Value: !GetAtt EC2Instance.PublicIp
-    
-  EC2PublicDNS:
-    Description: Public DNS name of EC2 instance
-    Value: !GetAtt EC2Instance.PublicDnsName
