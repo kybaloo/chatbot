@@ -5,7 +5,7 @@ Service pour l'intégration avec les modèles d'IA
 import logging
 from typing import List, Dict, Optional, Any
 from mistralai import Mistral
-from mistralai.exceptions import MistralException
+# from mistralai.exceptions import MistralException
 
 from ..config.settings import env_vars
 from ..models import Conversation, AIModel
@@ -79,11 +79,8 @@ class AIService:
 
             return result
 
-        except MistralException as e:
-            self.logger.error(f"Mistral API error: {str(e)}")
-            raise
         except Exception as e:
-            self.logger.error(f"Error in chat completion: {str(e)}")
+            self.logger.error(f"Mistral API error: {str(e)}")
             raise
 
     async def process_conversation(self, conversation: Conversation) -> Optional[str]:
