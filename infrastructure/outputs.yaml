@@ -2,8 +2,8 @@
 Conditions:
 ###############################################################################
   DeployEC2: !Not [!Equals [!Ref EnvironmentName, "dev-local"]]
-  UseWebhook: !Not [!Equals [!Ref WebhookUrl, ""]]
-  UseCustomWebhook: !Not [!Equals [!Ref WebhookUrl, ""]]
+  UseWebhook: !Not [!Equals [!Ref TelegramWebhookUrl, ""]]
+  UseCustomWebhook: !Not [!Equals [!Ref TelegramWebhookUrl, ""]]
 
 ###############################################################################
 Outputs:
@@ -25,5 +25,5 @@ Outputs:
     Value: 
       Fn::If:
         - UseCustomWebhook
-        - !Ref WebhookUrl
+        - !Ref TelegramWebhookUrl
         - Fn::Sub: 'http://${EC2Instance.PublicIp}:8000/${TelegramBotToken}'
