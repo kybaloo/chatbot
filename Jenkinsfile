@@ -120,6 +120,15 @@ pipeline {
                 }
             }
         }
+
+        stage('Test endpoint') {
+            steps {
+                script {
+                    echo "Testing the endpoint..."
+                    sh "make test-endpoint"
+                }
+            }
+        }
     }
     
     post {
