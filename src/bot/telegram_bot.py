@@ -21,7 +21,7 @@ from ..config.settings import env_vars
 from ..services.conversation_service import ConversationService
 from ..services.ai_service import AIService
 from ..utils.logger import log_info, log_error
-from ..utils.helpers import truncate_text, create_conversation_summary
+from ..utils.helpers import truncate_text, create_conversation_summary, format_response_for_telegram
 
 
 class TelegramBot:
@@ -529,8 +529,9 @@ class TelegramBot:
                 conversation.conversation_id, conversation
             )
 
-            # Envoyer la réponse à l'utilisateur
-            await update.message.reply_text(assistant_response)
+            # Formater la réponse pour Telegram et l'envoyer à l'utilisateur
+            formatted_response = format_response_for_telegram(assistant_response)
+            await update.message.reply_text(formatted_response, parse_mode="Markdown")
 
         except Exception as e:
             log_error(f"Erreur lors du traitement du message: {str(e)}")
@@ -558,3 +559,29 @@ class TelegramBot:
         log_info("Bot Telegram initialisé pour mode webhook")
         # En mode webhook, nous n'utilisons pas run_webhook() ici
         # car le traitement se fait via process_update() appelé par FastAPI
+
+    async def initialize(self):
+        """
+        Initialise l'application Telegram de manière asynchrone
+        Cette méthode doit être appelée avant d'utiliser le bot
+        """
+        try:
+            if self.application:
+                await self.application.initialize()
+                log_info("Application Telegram initialisée avec succès")
+            else:
+                raise Exception("Application Telegram non créée")
+        except Exception as e:
+            log_error(f"Erreur lors de l'initialisation de l'application Telegram: {str(e)}")
+            raise
+
+    async def shutdown(self):
+        """
+        Arrête proprement l'application Telegram
+        """
+        try:
+            if self.application:
+                await self.application.shutdown()
+                log_info("Application Telegram arrêtée proprement")
+        except Exception as e:
+            log_error(f"Erreur lors de l'arrêt de l'application Telegram: {str(e)}")
