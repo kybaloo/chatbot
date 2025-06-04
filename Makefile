@@ -8,11 +8,54 @@ MISTRAL_API_KEY ?= ""
 WEBHOOK_URL ?= ""
 env ?= kybaloo
 
-clean:
-	rm -rf venv
-	rm -rf __pycache__
-	rm -rf *.egg-info
-	rm -rf .pytest_cache
+# Version management
+VERSION := $(shell cat version 2>/dev/null || echo "1.0.0")
+PROJECT_NAME := chatbot-telegram-mistral
+
+# Colors for output
+BLUE := \033[36m
+GREEN := \033[32m
+YELLOW := \033[33m
+RED := \033[31m
+NC := \033[0m # No Color
+
+.PHONY: help version bump-major bump-minor bump-patch clean venv install build deploy test
+
+help: ## Show this help message
+	@echo "$(BLUE)🤖 Chatbot Telegram avec Mistral AI - v$(VERSION)$(NC)"
+	@echo ""
+	@echo "$(GREEN)Available commands:$(NC)"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+version: ## Show current version
+	@echo "$(GREEN)Current version: $(VERSION)$(NC)"
+
+bump-major: ## Bump major version (1.0.0 -> 2.0.0)
+	@echo "$(BLUE)Bumping major version...$(NC)"
+	@python -c "v='$(VERSION)'.split('.'); v[0]=str(int(v[0])+1); v[1]='0'; v[2]='0'; print('.'.join(v))" > version
+	@echo "$(GREEN)Version bumped to: $$(cat version)$(NC)"
+
+bump-minor: ## Bump minor version (1.0.0 -> 1.1.0)
+	@echo "$(BLUE)Bumping minor version...$(NC)"
+	@python -c "v='$(VERSION)'.split('.'); v[1]=str(int(v[1])+1); v[2]='0'; print('.'.join(v))" > version
+	@echo "$(GREEN)Version bumped to: $$(cat version)$(NC)"
+
+bump-patch: ## Bump patch version (1.0.0 -> 1.0.1)
+	@echo "$(BLUE)Bumping patch version...$(NC)"
+	@python -c "v='$(VERSION)'.split('.'); v[2]=str(int(v[2])+1); print('.'.join(v))" > version
+	@echo "$(GREEN)Version bumped to: $$(cat version)$(NC)"
+
+clean: ## Clean build artifacts and cache
+	@echo "$(BLUE)Cleaning project...$(NC)"
+	rm -rf venv .venv
+	rm -rf __pycache__ **/__pycache__
+	rm -rf *.egg-info **/*.egg-info
+	rm -rf .pytest_cache **/.pytest_cache
+	rm -rf .mypy_cache **/.mypy_cache
+	rm -rf build dist
+	rm -rf .coverage htmlcov
+	rm -rf .aws-sam
+	@echo "$(GREEN)Project cleaned!$(NC)"
 
 venv: clean
 	python3 -m venv .venv
