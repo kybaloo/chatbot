@@ -103,14 +103,14 @@ pipeline {
             }
         }
 
-        stage('Generate Documentation') {
-            steps {
-                script {
-                    echo "Generating project documentation..."
-                    sh "make docs"
-                }
-            }
-        }
+        // stage('Generate Documentation') {
+        //     steps {
+        //         script {
+        //             echo "Generating project documentation..."
+        //             sh "make docs"
+        //         }
+        //     }
+        // }
 
         stage('Build') {
             steps {
