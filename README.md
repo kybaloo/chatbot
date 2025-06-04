@@ -89,9 +89,9 @@ graph TB
    end
    
    subgraph "💽 External Dependencies"
-      DB[(🗃️ DynamoDB<br/>Persistent Storage)]
+      DB[🗃️ DynamoDB<br/>Persistent Storage]
       MAI[🤖 Mistral AI API<br/>LLM Models]
-      ENV[📄 Environment<br/>Configuration)]
+      ENV[📄 Environment<br/>Configuration]
    end
    
    %% Connections
