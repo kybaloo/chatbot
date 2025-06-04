@@ -129,6 +129,15 @@ pipeline {
                 }
             }
         }
+
+        stage('Webhook Set up') {
+            steps {
+                script {
+                    echo "Setting the Telegram webhook up..."
+                    sh "make setup-telegram-webhook"
+                }
+            }
+        }
     }
     
     post {
