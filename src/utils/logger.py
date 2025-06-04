@@ -6,6 +6,9 @@ import logging
 import sys
 from ..config.settings import env_vars
 
+import logging
+import sys
+import os
 
 def setup_logger():
     """Configure le système de logging pour l'application"""
@@ -13,11 +16,20 @@ def setup_logger():
     log_level_str = env_vars.LOG_LEVEL.upper()
     log_level = getattr(logging, log_level_str, logging.INFO)
 
+    # Chemin du fichier log - compatible Windows et AWS Lambda
+    if os.name == 'nt':  # Windows
+        log_file_path = os.path.join(os.getcwd(), "app.log")
+    else:  # Linux/AWS Lambda
+        log_file_path = "/tmp/app.log"
+
     # Configuration de base
     logging.basicConfig(
         level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("app.log")],
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(log_file_path)
+        ],
     )
 
     # Réduire la verbosité des logs de certaines bibliothèques
