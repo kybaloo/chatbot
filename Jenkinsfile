@@ -13,7 +13,7 @@ pipeline {
         MISTRAL_API_KEY = credentials('mistral-api-key')
         WEBHOOK_URL = 'https://4y9lvphtwh.execute-api.eu-west-3.amazonaws.com/webhook/telegram'
         // AWS credentials sont gérés automatiquement par Jenkins
-        DYNAMO_TABLE = "chatbot-conversations-kybaloo"
+        DYNAMO_TABLE = "chatbot-dbtable-kybaloo"
         LOG_LEVEL = "INFO"
         ENV_NAME = "kybaloo"
         ENABLE_TELEGRAM_BOT = "true"
