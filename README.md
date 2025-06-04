@@ -1,8 +1,8 @@
-# 🤖[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](./version)Chatbot Telegram avec Mistral AI
+# 🤖Chatbot Telegram avec Mistral AI
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](./version)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](./version)
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -69,59 +69,6 @@ Un **chatbot intelligent** qui connecte Telegram à l'API Mistral AI pour offrir
 Le projet suit une **architecture en couches moderne** pour garantir la maintenabilité, la testabilité et l'évolutivité :
 
 ```mermaid
-graph TB
-   subgraph "🎯 Présentation Layer"
-      TG[📱 Telegram Bot<br/>Commands & Interactions]
-      API[🌐 FastAPI REST API<br/>HTTP Endpoints]
-      WH[🔗 Webhook Handlers<br/>Real-time Events]
-   end
-   
-   subgraph "⚙️ Business Logic Layer"
-      CS[💬 Conversation Service<br/>Chat Management]
-      AIS[🧠 AI Service<br/>Mistral AI Integration]
-      US[👤 User Service<br/>User Management]
-   end
-   
-   subgraph "🗄️ Data Access Layer"
-      CR[💾 Conversation Repository<br/>CRUD Operations]
-      UR[👥 User Repository<br/>User Data]
-      CC[⚙️ Config Cache<br/>Settings & Models]
-   end
-   
-   subgraph "💽 External Dependencies"
-      DB[(🗃️ DynamoDB<br/>Persistent Storage)]
-      MAI[🤖 Mistral AI API<br/>LLM Models]
-      ENV[📄 Environment<br/>Configuration)]
-   end
-   
-   %% Connections
-   TG --> CS
-   TG --> US
-   API --> CS
-   API --> US
-   WH --> CS
-   
-   CS --> AIS
-   CS --> CR
-   AIS --> MAI
-   US --> UR
-   CS --> CC
-   
-   CR --> DB
-   UR --> DB
-   CC --> ENV
-   
-   %% Styling
-   classDef presentation fill:#e1f5fe
-   classDef business fill:#f3e5f5
-   classDef data fill:#e8f5e8
-   classDef external fill:#fff3e0
-   
-   class TG,API,WH presentation
-   class CS,AIS,US business
-   class CR,UR,CC data
-   class DB,MAI,ENV external
-```
 graph TB
    subgraph "🎯 Présentation Layer"
       TG[📱 Telegram Bot<br/>Commands & Interactions]
