@@ -50,6 +50,22 @@ class TelegramBot:
 
         log_info("TelegramBot initialized")
 
+    async def set_bot_commands(self):
+        """Définir les commandes du bot qui seront affichées dans l'interface de Telegram"""
+        commands = [
+            ("start", "Démarrer une nouvelle conversation"),
+            ("help", "Afficher l'aide"),
+            ("history", "Afficher l'historique des conversations"),
+            ("new", "Créer une nouvelle conversation"),
+            ("settings", "Modifier les paramètres")
+        ]
+        
+        try:
+            await self.bot.set_my_commands(commands)
+            log_info("Commandes du bot définies avec succès")
+        except Exception as e:
+            log_error(f"Erreur lors de la définition des commandes du bot: {str(e)}")
+
     def _initialize_application(self):
         """Initialise l'application Telegram"""
         self.application = (
@@ -544,13 +560,26 @@ class TelegramBot:
         """
         Gère les erreurs rencontrées par le dispatcher
         """
-        log_error(f"Exception lors du traitement d'une mise à jour: {context.error}")
+        error_message = f"Exception lors du traitement d'une mise à jour: {context.error}"
+        log_error(error_message)
+        
+        # Journaliser plus de détails pour le débogage
+        if hasattr(context.error, "__traceback__"):
+            import traceback
+            tb_str = ''.join(traceback.format_tb(context.error.__traceback__))
+            log_error(f"Traceback: {tb_str}")
 
         # Informer l'utilisateur d'une erreur
         if update and update.effective_message:
-            await update.effective_message.reply_text(
-                "Désolé, une erreur s'est produite lors du traitement de votre message."
-            )
+            # En mode développement, on peut envoyer l'erreur complète au client
+            if env_vars.ENV_NAME == "local" or env_vars.ENV_NAME == "dev":
+                await update.effective_message.reply_text(
+                    f"Erreur de développement: {context.error}\n\nVeuillez vérifier les logs pour plus de détails."
+                )
+            else:
+                await update.effective_message.reply_text(
+                    "Désolé, une erreur s'est produite lors du traitement de votre message."
+                )
 
     def run(self):
         """
@@ -567,7 +596,15 @@ class TelegramBot:
         """
         try:
             if self.application:
+                # Initialiser le bot lui-même avant d'initialiser l'application
+                await self.bot.initialize()
+                
+                # Initialiser l'application
                 await self.application.initialize()
+                
+                # Définir les commandes du bot pour qu'elles apparaissent dans l'interface Telegram
+                await self.set_bot_commands()
+                
                 log_info("Application Telegram initialisée avec succès")
             else:
                 raise Exception("Application Telegram non créée")
