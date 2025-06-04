@@ -18,9 +18,18 @@ pipeline {
         ENV_NAME = "kybaloo"
         ENABLE_TELEGRAM_BOT = "true"
         CONVERSATION_TTL_DAYS = "30"
-    }
-
+    }    
+    
     stages {
+        stage('Version Check') {
+            steps {
+                script {
+                    echo "Checking project version..."
+                    sh "make version"
+                }
+            }
+        }
+
         stage('Initialisation') {
             steps {
                 sh "echo Branch name ${BRANCH_NAME}"
@@ -63,13 +72,15 @@ pipeline {
                     }
                 }
             }
-        }
-
+        }        
+        
         stage('Code Quality') {
             steps {
                 script {
                     echo "Running code quality checks..."
                     sh "make format"
+                    echo "Running code linting..."
+                    sh "make lint"
                 }
             }
         }
@@ -88,6 +99,15 @@ pipeline {
                 script {
                     echo "Running integration tests..."
                     sh "make test-integration"
+                }
+            }
+        }
+
+        stage('Generate Documentation') {
+            steps {
+                script {
+                    echo "Generating project documentation..."
+                    sh "make docs"
                 }
             }
         }
