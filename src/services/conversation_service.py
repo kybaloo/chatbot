@@ -80,7 +80,7 @@ class ConversationService(BaseService[Conversation]):
             self.repository.get_by_user, user_id
         )
         return result if result is not None else []
-
+    
     async def create(self, entity: Conversation) -> Conversation:
         """Crée une nouvelle conversation"""
         if not self.repository:
@@ -88,11 +88,24 @@ class ConversationService(BaseService[Conversation]):
             self.logger.debug("No storage available, returning conversation without saving")
             return entity
         
-        result = await self._safe_repository_operation(
-            self.repository.create, entity
-        )
-        # Si la sauvegarde échoue, retourner quand même l'entité
-        return result if result is not None else entity
+        try:
+            # Tentative de sauvegarde avec logging détaillé
+            self.logger.info(f"Tentative de création de la conversation {entity.conversation_id} pour l'utilisateur {entity.user_id}")
+            result = await self._safe_repository_operation(
+                self.repository.create, entity
+            )
+            
+            # Vérifier le résultat
+            if result is not None:
+                self.logger.info(f"Conversation {entity.conversation_id} créée avec succès")
+            else:
+                self.logger.error(f"Échec de création de la conversation {entity.conversation_id} - Résultat null")
+            
+            # Retourner le résultat ou l'entité originale en cas d'échec
+            return result if result is not None else entity
+        except Exception as e:
+            self.logger.error(f"Exception lors de la création de la conversation: {str(e)}")
+            return entity
 
     async def create_new_conversation(
         self, user_id: str, username: Optional[str] = None
@@ -128,12 +141,24 @@ class ConversationService(BaseService[Conversation]):
             # Retourner l'entité telle quelle si pas de stockage
             self.logger.debug("No storage available, returning conversation without updating")
             return entity
+        
+        try:    
+            self.logger.info(f"Tentative de mise à jour de la conversation {entity.conversation_id} pour l'utilisateur {entity.user_id}")
+            result = await self._safe_repository_operation(
+                self.repository.update, id, entity
+            )
             
-        result = await self._safe_repository_operation(
-            self.repository.update, id, entity
-        )
-        # Si la mise à jour échoue, retourner quand même l'entité
-        return result if result is not None else entity
+            # Vérifier le résultat
+            if result is not None:
+                self.logger.info(f"Conversation {entity.conversation_id} mise à jour avec succès")
+            else:
+                self.logger.error(f"Échec de mise à jour de la conversation {entity.conversation_id} - Résultat null")
+            
+            # Si la mise à jour échoue, retourner quand même l'entité
+            return result if result is not None else entity
+        except Exception as e:
+            self.logger.error(f"Exception lors de la mise à jour de la conversation: {str(e)}")
+            return entity
 
     async def delete(self, id: str) -> bool:
         """Supprime une conversation par son ID (non implémenté)"""
