@@ -32,22 +32,6 @@ run-local:
 run-dev:
 	uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
 
-run-local-dynamo:
-	@echo "Démarrage de DynamoDB Local..."
-	powershell -File setup_local_dynamo.ps1
-
-create-local-table:
-	@echo "Création de la table DynamoDB locale..."
-	python scripts/create_local_table.py
-
-setup-ngrok:
-	@echo "Configuration du webhook Telegram avec ngrok..."
-	python scripts/setup_ngrok_webhook.py
-
-dev-setup:
-	@echo "Configuration de l'environnement de développement..."
-	powershell -File dev_setup.ps1
-
 format:
 	@echo "Formatting code with black..."
 	.venv/bin/python -m black src tests || true
