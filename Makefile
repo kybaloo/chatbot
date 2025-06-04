@@ -85,7 +85,7 @@ test-integration:
 
 test-endpoint:
 	@echo "Running endpoint tests..."
-	$(eval API_URL := $(shell aws cloudformation describe-stacks --stack-name chatbot-stack-${env} --region ${AWS_REGION} \
+	$(eval API_URL := $(shell aws cloudformation describe-stacks --stack-name multi-stack-${env} --region ${AWS_REGION} \
 		--query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text))
 	
 	@echo "Testing base endpoint at ${API_URL}"
