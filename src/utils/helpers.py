@@ -83,3 +83,20 @@ async def run_async(func, *args, **kwargs):
 def batch_items(items: List[Any], batch_size: int = 25) -> List[List[Any]]:
     """Divise une liste d'éléments en lots"""
     return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
+
+
+def format_response_for_telegram(text: str) -> str:
+    """
+    Formate le texte de réponse pour Telegram en respectant le Markdown
+    Convertit le formatage Mistral AI au formatage Telegram
+    """
+    if not text:
+        return ""
+    
+    import re
+    
+    # Convertir le formatage gras Mistral (**texte**) au formatage Telegram (*texte*)
+    # Utilise une regex non-greedy pour éviter de matcher plusieurs ** sur une même ligne
+    formatted_text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+    
+    return formatted_text
