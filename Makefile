@@ -6,6 +6,7 @@ AWS_REGION ?= eu-west-3
 TELEGRAM_BOT_TOKEN ?= ""
 MISTRAL_API_KEY ?= ""
 WEBHOOK_URL ?= ""
+env ?= kybaloo
 
 clean:
 	rm -rf venv
