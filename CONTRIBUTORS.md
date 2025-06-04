@@ -7,7 +7,7 @@ Ce projet existe grâce à toutes les personnes qui y contribuent. 🙏
 ### kybaloo
 - **Rôle** : Créateur et mainteneur principal
 - **Contributions** : Architecture initiale, développement core, documentation
-- **Contact** : kybaloo@example.com
+- **Contact** : kybalooflo@gmail.com
 - **GitHub** : [@kybaloo](https://github.com/kybaloo)
 
 ## 🤝 Contributeurs
@@ -158,8 +158,8 @@ Tous les contributeurs doivent respecter notre [Code de Conduite](https://www.co
 - **Issues** : [Signaler un problème](https://github.com/kybaloo/chatbot/issues)
 
 ### Contact direct
-- **Email** : kybaloo@example.com
-- **Twitter** : [@kybaloo](https://twitter.com/kybaloo) (si applicable)
+- **Email** : kybalooflo@gmail.com
+- **X** : [@FlorentinKybalo](https://twitter.com/FlorentinKybalo) 
 
 ---
 
