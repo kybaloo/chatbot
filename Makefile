@@ -2,6 +2,11 @@
 # by default, we settle down in this region
 AWS_REGION ?= eu-west-3
 
+# Default values for deployment
+TELEGRAM_BOT_TOKEN ?= ""
+MISTRAL_API_KEY ?= ""
+TELEGRAM_WEBHOOK_URL ?= ""
+
 clean:
 	rm -rf venv
 	rm -rf __pycache__
@@ -9,10 +14,10 @@ clean:
 	rm -rf .pytest_cache
 
 venv: clean
-	python3 -m venv venv
+	python3 -m venv .venv
 
 install:
-	venv/bin/pip install -r requirements.txt
+	.venv/bin/pip install -r requirements.txt
 
 build:
 	sam build --use-container -t infrastructure/template.yaml
@@ -45,15 +50,15 @@ dev-setup:
 
 format:
 	@echo "Formatting code with black..."
-	venv/bin/python -m black src tests || true
+	.venv/bin/python -m black src tests || true
 
 lint:
 	@echo "Linting code with flake8..."
-	venv/bin/python -m flake8 src tests || true
+	.venv/bin/python -m flake8 src tests || true
 
 docs:
 	@echo "Generating documentation..."
-	venv/bin/sphinx-build -b html docs/source docs/build
+	.venv/bin/sphinx-build -b html docs/source docs/build
 
 deploy:
 	@echo "Deploying to " ${env}
@@ -84,15 +89,15 @@ serve:
 
 test:
 	@echo "Running tests..."
-	venv/bin/python -m pytest || true
+	.venv/bin/python -m pytest || true
 
 test-unit:
 	@echo "Running unit tests..."
-	venv/bin/python -m pytest tests/models tests/repositories tests/services || echo "No unit tests found, skipping"
+	.venv/bin/python -m pytest tests/models tests/repositories tests/services || echo "No unit tests found, skipping"
 
 test-integration:
 	@echo "Running integration tests..."
-	venv/bin/python -m pytest tests/test_api_integration.py || echo "No integration tests found, skipping"
+	.venv/bin/python -m pytest tests/test_api_integration.py || echo "No integration tests found, skipping"
 
 test-endpoint:
 	@echo "Running endpoint tests..."
