@@ -90,12 +90,11 @@ class ConversationRepository(BaseRepository[Conversation]):
                 }
             )
 
-        # Créer l'item DynamoDB
+        # Créer l'item DynamoDB avec la clé primaire 'id'
         item = {
+            "id": f"USER#{entity.user_id}#CONV#{entity.conversation_id}",  # Clé primaire combinée
             "conversation_id": entity.conversation_id,
             "user_id": entity.user_id,
-            "pk": f"USER#{entity.user_id}",
-            "sk": f"CONV#{entity.conversation_id}",
             "username": entity.username,
             "created_at": entity.created_at.isoformat(),
             "updated_at": entity.updated_at.isoformat(),
@@ -124,7 +123,7 @@ class ConversationRepository(BaseRepository[Conversation]):
         """Récupère une conversation spécifique d'un utilisateur"""
         try:
             response = self.table.get_item(
-                Key={"pk": f"USER#{user_id}", "sk": f"CONV#{conversation_id}"}
+                Key={"id": f"USER#{user_id}#CONV#{conversation_id}"}
             )
             item = response.get("Item")
             if not item:
@@ -146,9 +145,11 @@ class ConversationRepository(BaseRepository[Conversation]):
     async def get_by_user(self, user_id: str) -> List[Conversation]:
         """Récupère toutes les conversations d'un utilisateur"""
         try:
-            response = self.table.query(
-                KeyConditionExpression="pk = :pk",
-                ExpressionAttributeValues={":pk": f"USER#{user_id}"},
+            # Pour un id combiné, nous devons utiliser un scan avec un filtre
+            # Ce n'est pas idéal pour la performance, mais c'est nécessaire avec cette structure de table
+            response = self.table.scan(
+                FilterExpression="begins_with(id, :prefix)",
+                ExpressionAttributeValues={":prefix": f"USER#{user_id}#CONV#"},
             )
 
             conversations = []
@@ -196,7 +197,7 @@ class ConversationRepository(BaseRepository[Conversation]):
         """Supprime une conversation spécifique d'un utilisateur"""
         try:
             self.table.delete_item(
-                Key={"pk": f"USER#{user_id}", "sk": f"CONV#{conversation_id}"}
+                Key={"id": f"USER#{user_id}#CONV#{conversation_id}"}
             )
             return True
         except Exception as e:
