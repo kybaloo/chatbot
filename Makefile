@@ -5,7 +5,7 @@ AWS_REGION ?= eu-west-3
 # Default values for deployment
 TELEGRAM_BOT_TOKEN ?= ""
 MISTRAL_API_KEY ?= ""
-TELEGRAM_WEBHOOK_URL ?= ""
+WEBHOOK_URL ?= ""
 
 clean:
 	rm -rf venv
@@ -30,7 +30,7 @@ run-local:
 	docker run -p 80:80 -p 8000:8000 -v $(PWD)/.env:/code/.env chatbot:latest
 	
 run-dev:
-	uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
+	uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 format:
 	@echo "Formatting code with black..."
@@ -64,7 +64,7 @@ deploy:
          ParameterKey=EnvironmentName,ParameterValue=${env} \
          ParameterKey=TelegramBotToken,ParameterValue=${TELEGRAM_BOT_TOKEN} \
          ParameterKey=MistralApiKey,ParameterValue=${MISTRAL_API_KEY} \
-         ParameterKey=TelegramWebhookUrl,ParameterValue=${TELEGRAM_WEBHOOK_URL} \
+         ParameterKey=TelegramWebhookUrl,ParameterValue=${WEBHOOK_URL} \
          --no-fail-on-empty-changeset
 
 
