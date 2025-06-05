@@ -141,16 +141,34 @@ class ConversationRepository(BaseRepository[Conversation]):
         # Cette méthode pourrait être très coûteuse sur une grande table
         # Utiliser get_by_user à la place
         raise NotImplementedError("Use get_by_user instead")
-
+    
     async def get_by_user(self, user_id: str) -> List[Conversation]:
         """Récupère toutes les conversations d'un utilisateur"""
         try:
-            # Pour un id combiné, nous devons utiliser un scan avec un filtre
-            # Ce n'est pas idéal pour la performance, mais c'est nécessaire avec cette structure de table
-            response = self.table.scan(
-                FilterExpression="begins_with(id, :prefix)",
-                ExpressionAttributeValues={":prefix": f"USER#{user_id}#CONV#"},
-            )
+            # Utiliser query avec un index secondaire global au lieu de scan
+            # Il faut d'abord vérifier si l'index global "user_id-index" existe
+            # Si l'index n'existe pas, on implémente une version de fallback temporaire
+            # Pour créer l'index, utilisez AWS Console ou AWS CLI
+            
+            # On essaie d'abord d'utiliser l'index GSI s'il existe
+            try:
+                response = self.table.query(
+                    IndexName="user_id-index",  # Nom de l'index secondaire global
+                    KeyConditionExpression="user_id = :user_id_val",
+                    ExpressionAttributeValues={":user_id_val": user_id},
+                )
+                self.logger.info(f"Recherche utilisateur via GSI pour {user_id}")
+            except Exception as e:
+                # Si l'index n'existe pas ou autre erreur, message de log et fallback
+                self.logger.warning(
+                    f"Erreur lors de l'utilisation de l'index GSI: {str(e)}. "
+                    f"Fallback sur scan. Considérez créer un GSI 'user_id-index' sur l'attribut 'user_id'"
+                )                # Fallback sur la méthode scan (non optimale)
+                response = self.table.scan(
+                    FilterExpression="begins_with(id, :prefix)",
+                    ExpressionAttributeValues={":prefix": f"USER#{user_id}#CONV#"},
+                )
+                self.logger.warning(f"Utilisation de scan pour {user_id} (non optimisé)")
 
             conversations = []
             for item in response.get("Items", []):
