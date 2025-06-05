@@ -2,10 +2,19 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](./version)
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](./version)
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
+[![CI/CD](https://github.com/kybaloo/chatbot/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/kybaloo/chatbot/actions/workflows/ci-cd.yml)
+[![CodeQL](https://github.com/kybaloo/chatbot/actions/workflows/codeql.yml/badge.svg)](https://github.com/kybaloo/chatbot/security/code-scanning)
+[![Security](https://img.shields.io/badge/Security-Policy-green.svg)](./SECURITY.md)
+[![Code of Conduct](https://img.shields.io/badge/Code%20of%20Conduct-Contributor%20Covenant-orange.svg)](./CODE_OF_CONDUCT.md)
+
+[![Contributors](https://img.shields.io/github/contributors/kybaloo/chatbot.svg)](./CONTRIBUTORS.md)
+[![Issues](https://img.shields.io/github/issues/kybaloo/chatbot.svg)](https://github.com/kybaloo/chatbot/issues)
+[![Pull Requests](https://img.shields.io/github/issues-pr/kybaloo/chatbot.svg)](https://github.com/kybaloo/chatbot/pulls)
 [![GitHub](https://img.shields.io/badge/GitHub-kybaloo%2Fchatbot-blue?logo=github)](https://github.com/kybaloo/chatbot)
 
 </div>
