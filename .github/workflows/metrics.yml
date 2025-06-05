@@ -1,0 +1,90 @@
+name: 📊 Project Metrics
+
+on:
+  schedule:
+    # Run every Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  update-metrics:
+    name: 📈 Update Project Metrics
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: 📦 Install dependencies
+      run: |
+        pip install requests PyGithub
+        
+    - name: 📊 Generate metrics report
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -c "
+import os
+from github import Github
+from datetime import datetime, timedelta
+
+# Initialize GitHub client
+g = Github(os.environ['GITHUB_TOKEN'])
+repo = g.get_repo('kybaloo/chatbot')
+
+# Get metrics
+issues = repo.get_issues(state='all')
+prs = repo.get_pulls(state='all')
+contributors = repo.get_contributors()
+commits = repo.get_commits(since=datetime.now() - timedelta(days=30))
+
+# Count metrics
+total_issues = issues.totalCount
+open_issues = repo.get_issues(state='open').totalCount
+total_prs = prs.totalCount
+total_contributors = contributors.totalCount
+recent_commits = commits.totalCount
+
+# Generate report
+report = f'''# 📊 Métriques du Projet (Mise à jour: {datetime.now().strftime('%Y-%m-%d')})
+
+## 📈 Statistiques Générales
+- **Issues totales**: {total_issues}
+- **Issues ouvertes**: {open_issues}
+- **Pull Requests**: {total_prs}
+- **Contributeurs**: {total_contributors}
+- **Commits (30 derniers jours)**: {recent_commits}
+
+## 🏆 Top Contributeurs
+'''
+
+for contributor in contributors[:5]:
+    report += f'- {contributor.login} ({contributor.contributions} contributions)\n'
+
+report += f'''
+## 📊 Santé du Projet
+- **Ratio de fermeture d'issues**: {((total_issues - open_issues) / total_issues * 100):.1f}%
+- **Activité récente**: {recent_commits} commits ce mois
+
+---
+*Généré automatiquement le {datetime.now().strftime('%d/%m/%Y à %H:%M UTC')}*
+'''
+
+# Save report
+with open('METRICS.md', 'w', encoding='utf-8') as f:
+    f.write(report)
+
+print('✅ Rapport de métriques généré')
+"
+        
+    - name: 📤 Commit metrics
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add METRICS.md
+        git diff --staged --quiet || (git commit -m "📊 Mise à jour des métriques du projet" && git push)
