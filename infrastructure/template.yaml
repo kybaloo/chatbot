@@ -29,9 +29,10 @@ Parameters:
 
 ###############################################################################
 Resources:
-###############################################################################
-  DynamoDBTable:
+###############################################################################  DynamoDBTable:
     Type: "AWS::DynamoDB::Table"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub "chatbot-dbtable-${EnvironmentName}"
       AttributeDefinitions:
