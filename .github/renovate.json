@@ -1,0 +1,45 @@
+{
+  "extends": [
+    "config:base"
+  ],
+  "schedule": [
+    "before 4am on Monday"
+  ],
+  "labels": [
+    "dependencies",
+    "automated"
+  ],
+  "assignees": [
+    "kybaloo"
+  ],
+  "commitMessagePrefix": "📦",
+  "prTitle": "📦 Update dependencies",
+  "packageRules": [
+    {
+      "matchPackagePatterns": ["*"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-minor-patch"
+    },
+    {
+      "matchPackagePatterns": ["fastapi", "uvicorn"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["api", "major-update"],
+      "reviewers": ["kybaloo"]
+    },
+    {
+      "matchPackagePatterns": ["pytest", "pytest-*"],
+      "groupName": "pytest packages"
+    },
+    {
+      "matchPackagePatterns": ["boto3", "botocore"],
+      "groupName": "AWS packages",
+      "labels": ["aws"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "urgent"],
+    "assignees": ["kybaloo"]
+  }
+}
