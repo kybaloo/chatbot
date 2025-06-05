@@ -43,20 +43,10 @@ Resources:
           AttributeType: "S"
       KeySchema:
         - AttributeName: "id"
-          KeyType: "HASH"
+          KeyType: "HASH"      
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
-      GlobalSecondaryIndexes:
-        - IndexName: "user_id-index"
-          KeySchema:
-            - AttributeName: "user_id"
-              KeyType: "HASH"
-          Projection:
-            ProjectionType: "ALL"
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
 
   Api:
     Type: AWS::Serverless::HttpApi
