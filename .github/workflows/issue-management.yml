@@ -1,0 +1,93 @@
+name: 🐛 Bug Reports & Issues
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+
+jobs:
+  issue-management:
+    name: 🏷️ Issue Management
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📋 Auto-label bug reports
+      if: contains(github.event.issue.title, '[BUG]') || contains(github.event.issue.body, 'bug')
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addLabels({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['bug', 'needs-triage']
+          });
+          
+    - name: 💡 Auto-label feature requests
+      if: contains(github.event.issue.title, '[FEATURE]') || contains(github.event.issue.body, 'feature')
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addLabels({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['enhancement', 'needs-triage']
+          });
+          
+    - name: 📚 Auto-label documentation
+      if: contains(github.event.issue.title, '[DOC]') || contains(github.event.issue.body, 'documentation')
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addLabels({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: ['documentation']
+          });
+          
+    - name: 🎯 Auto-assign to maintainer
+      if: github.event.action == 'opened'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.addAssignees({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            assignees: ['kybaloo']
+          });
+          
+    - name: 👋 Welcome first-time contributors
+      if: github.event.action == 'opened'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            creator: context.payload.issue.user.login,
+            state: 'all'
+          });
+          
+          if (issues.length === 1) {
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `👋 Bienvenue @${context.payload.issue.user.login} ! 
+
+Merci pour votre première contribution au projet **Chatbot Telegram avec Mistral AI** ! 🎉
+
+📋 **Prochaines étapes :**
+- Un mainteneur va examiner votre issue dans les 48h
+- N'hésitez pas à ajouter plus de détails si nécessaire
+- Consultez notre [Guide de contribution](CONTRIBUTING.md) pour plus d'infos
+
+🤝 **Besoin d'aide ?**
+- Jetez un œil à notre [documentation](README.md)
+- Explorez les [issues existantes](https://github.com/kybaloo/chatbot/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) marquées "good first issue"
+
+Merci encore ! 🚀`
+            });
+          }
