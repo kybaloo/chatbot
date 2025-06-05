@@ -13,6 +13,33 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 - Analyse de sécurité intégrée
 - Notifications pipeline (Slack/Teams)
 
+## [1.0.3] - 2025-06-05
+
+### ✨ Ajouté
+#### Finalisation de l'écosystème GitHub
+- 🔀 **Template Pull Request** complet avec checklist qualité
+- 🤖 **GitHub Actions CI/CD** pipeline automatisé (5 phases)
+- 🏷️ **Gestion automatique des issues** avec auto-labeling
+- 📊 **Métriques automatiques** du projet (hebdomadaires)
+- 🔐 **Politique de sécurité** complète (SECURITY.md)
+- 📋 **Code de conduite** professionnel (CODE_OF_CONDUCT.md)
+- 🔄 **Configuration Renovate** pour les dépendances
+- 🔄 **Sync automatique des forks** pour les contributeurs
+
+### 🚀 Amélioré
+#### Optimisation DynamoDB (TERMINÉE)
+- ✅ **GSI user_id-index** créé et opérationnel
+- ✅ **Méthode get_by_user()** optimisée (query vs scan)
+- ✅ **Infrastructure CloudFormation** mise à jour
+- ✅ **Performance** : ~90% réduction des coûts pour les requêtes utilisateur
+- ✅ **Compatibilité** : Fallback automatique en cas d'indisponibilité GSI
+
+#### Écosystème de développement
+- 🔧 **GitHub Actions** remplace partiellement Jenkins pour CI
+- 🤖 **Automatisation** des tâches répétitives (issues, métriques)
+- 📊 **Monitoring** automatique de la santé du projet
+- 🛡️ **Sécurité** renforcée avec scans automatiques
+
 ## [1.0.2] - 2025-06-04
 
 ### 🚀 Amélioré
