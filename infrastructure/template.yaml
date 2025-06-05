@@ -29,7 +29,7 @@ Parameters:
 
 ###############################################################################
 Resources:
-###############################################################################  
+###############################################################################    
   DynamoDBTable:
     Type: "AWS::DynamoDB::Table"
     DeletionPolicy: Retain
@@ -38,8 +38,6 @@ Resources:
       TableName: !Sub "chatbot-dbtable-${EnvironmentName}"
       AttributeDefinitions:
         - AttributeName: "id"
-          AttributeType: "S"
-        - AttributeName: "user_id"
           AttributeType: "S"
       KeySchema:
         - AttributeName: "id"
