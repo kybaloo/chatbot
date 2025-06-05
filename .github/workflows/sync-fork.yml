@@ -1,0 +1,85 @@
+name: 🔄 Sync Fork
+
+on:
+  schedule:
+    # Run every day at 6:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: 🔄 Sync with upstream
+    runs-on: ubuntu-latest
+    if: github.repository != 'kybaloo/chatbot'  # Only run on forks
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+        
+    - name: 🔄 Sync upstream
+      id: sync
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add upstream remote
+        git remote add upstream https://github.com/kybaloo/chatbot.git
+        git fetch upstream
+        
+        # Check if there are new commits
+        LOCAL=$(git rev-parse @)
+        REMOTE=$(git rev-parse @{u})
+        UPSTREAM=$(git rev-parse upstream/main)
+        
+        if [ $LOCAL != $UPSTREAM ]; then
+          echo "New commits found, syncing..."
+          git merge upstream/main
+          git push origin main
+          echo "synced=true" >> $GITHUB_OUTPUT
+        else
+          echo "Already up to date"
+          echo "synced=false" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: 📢 Create PR if needed
+      if: steps.sync.outputs.synced == 'true'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { data: prs } = await github.rest.pulls.list({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            head: 'main',
+            base: 'develop',
+            state: 'open'
+          });
+          
+          if (prs.length === 0) {
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔄 Sync upstream changes',
+              head: 'main',
+              base: 'develop',
+              body: `
+## 🔄 Synchronisation Automatique
+
+Cette PR synchronise les derniers changements depuis le repository upstream.
+
+### 📋 Changements
+- Mise à jour automatique depuis \`kybaloo/chatbot:main\`
+- Résolution automatique des conflits simples
+
+### ✅ Actions à effectuer
+- [ ] Réviser les changements
+- [ ] Tester localement si nécessaire
+- [ ] Merger la PR
+
+---
+*Cette PR a été créée automatiquement par GitHub Actions*
+              `
+            });
+          }
