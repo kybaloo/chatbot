@@ -1,0 +1,181 @@
+name: 🔄 CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # ===== Phase 1: Code Quality =====
+  code-quality:
+    name: 🧹 Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🎨 Code formatting check
+      run: |
+        pip install black
+        black --check .
+        
+    - name: 🔍 Linting
+      run: |
+        pip install flake8
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        
+    - name: 🔒 Security check
+      run: |
+        pip install safety bandit
+        safety check
+        bandit -r src/ -f json || true
+
+  # ===== Phase 2: Tests =====
+  tests:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+        
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-mock
+        
+    - name: 🧪 Run unit tests
+      run: |
+        pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
+        
+    - name: 📊 Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: matrix.python-version == '3.12'
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  # ===== Phase 3: Build & Package =====
+  build:
+    name: 🏗️ Build
+    runs-on: ubuntu-latest
+    needs: tests
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🏗️ Build package
+      run: |
+        python -m pip install build
+        python -m build
+        
+    - name: 📤 Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-package-distributions
+        path: dist/
+
+  # ===== Phase 4: Deploy (pour main uniquement) =====
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: ⚙️ Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-west-3
+        
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install AWS CLI
+      run: |
+        pip install awscli
+        
+    - name: 🚀 Deploy to AWS
+      run: |
+        # Zipper le code pour Lambda
+        zip -r chatbot-lambda.zip src/ requirements.txt
+        
+        # Déployer via AWS CLI (remplace le déploiement Jenkins)
+        aws lambda update-function-code \
+          --function-name chatbot-lambda-kybaloo \
+          --zip-file fileb://chatbot-lambda.zip
+          
+    - name: ✅ Verify deployment
+      run: |
+        # Vérifier que la fonction Lambda répond
+        aws lambda invoke \
+          --function-name chatbot-lambda-kybaloo \
+          --payload '{"httpMethod": "GET", "path": "/health"}' \
+          response.json
+        cat response.json
+
+  # ===== Phase 5: Notification =====
+  notify:
+    name: 📢 Notification
+    runs-on: ubuntu-latest
+    needs: [code-quality, tests, build, deploy]
+    if: always()
+    
+    steps:
+    - name: 📢 Notify deployment status
+      if: github.ref == 'refs/heads/main'
+      run: |
+        if [ "${{ needs.deploy.result }}" == "success" ]; then
+          echo "✅ Deployment successful!"
+        else
+          echo "❌ Deployment failed!"
+        fi
