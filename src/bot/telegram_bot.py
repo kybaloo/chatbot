@@ -189,7 +189,7 @@ class TelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text(
-            help_text, reply_markup=reply_markup, parse_mode="Markdown"
+            help_text, reply_markup=reply_markup, parse_mode="MarkdownV2"
         )
 
     async def history_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -239,7 +239,7 @@ class TelegramBot:
             "📚 *Voici vos conversations récentes* 📚\n"
             "Sélectionnez une conversation pour la continuer :",
             reply_markup=reply_markup,
-            parse_mode="Markdown",
+            parse_mode="MarkdownV2",
         )
 
     async def new_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -294,7 +294,7 @@ class TelegramBot:
             "⚙️ *Paramètres* ⚙️\n\n"
             "Personnalisez votre expérience en modifiant les paramètres ci-dessous :",
             reply_markup=reply_markup,
-            parse_mode="Markdown",
+            parse_mode="MarkdownV2",
         )
 
     async def handle_conversation_selection(
@@ -384,7 +384,7 @@ class TelegramBot:
             f"{messages_preview}\n"
             f"La conversation est maintenant active. Vous pouvez continuer à échanger des messages.",
             reply_markup=reply_markup,
-            parse_mode="Markdown",
+            parse_mode='MarkdownV2',
         )
 
     async def handle_model_selection(
@@ -425,7 +425,7 @@ class TelegramBot:
                 "🤖 *Sélectionnez un modèle d'IA* 🤖\n\n"
                 "Choisissez le modèle que vous souhaitez utiliser pour vos conversations :",
                 reply_markup=reply_markup,
-                parse_mode="Markdown",
+                parse_mode='MarkdownV2',
             )
             return
 
@@ -547,7 +547,7 @@ class TelegramBot:
 
             # Formater la réponse pour Telegram et l'envoyer à l'utilisateur
             formatted_response = format_response_for_telegram(assistant_response)
-            await update.message.reply_text(formatted_response, parse_mode="Markdown")
+            await update.message.reply_text(formatted_response, parse_mode="MarkdownV2")
 
         except Exception as e:
             log_error(f"Erreur lors du traitement du message: {str(e)}")
