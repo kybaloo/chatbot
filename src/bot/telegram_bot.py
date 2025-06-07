@@ -44,6 +44,16 @@ class TelegramBot:
 
         # Cache des conversations actives par utilisateur
         self.active_conversations = {}
+        
+        # Paramètres de langue par utilisateur
+        self.user_languages = {}
+        self.language_prompts = {
+            "fr": "Réponds toujours en français.",
+            "en": "Always respond in English.",
+            "es": "Responde siempre en español.",
+            "de": "Antworte immer auf Deutsch.",
+            "it": "Rispondi sempre in italiano.",
+        }
 
         # Initialiser l'application
         self._initialize_application()
@@ -85,6 +95,9 @@ class TelegramBot:
         )
         self.application.add_handler(
             CallbackQueryHandler(self.handle_model_selection, pattern=r"^model_")
+        )
+        self.application.add_handler(
+            CallbackQueryHandler(self.handle_language_selection, pattern=r"^lang_")
         )
         self.application.add_handler(
             CallbackQueryHandler(self.handle_settings_selection, pattern=r"^settings_")
@@ -160,17 +173,17 @@ class TelegramBot:
         Affiche l'aide et les commandes disponibles
         """
         help_text = (
-            "🤖 *Commandes disponibles* 🤖\n\n"
+            "🤖 <b>Commandes disponibles</b> 🤖\n\n"
             "• /start - Démarre une nouvelle conversation\n"
             "• /new - Crée une nouvelle conversation\n"
             "• /history - Affiche l'historique de vos conversations\n"
             "• /settings - Personnalisez vos préférences\n"
             "• /help - Affiche cette aide\n\n"
-            "💬 *Utilisation* 💬\n"
+            "💬 <b>Utilisation</b> 💬\n"
             "Envoyez-moi simplement un message et je vous répondrai. "
             "Toutes vos conversations sont sauvegardées et vous pouvez "
             "y revenir à tout moment via la commande /history.\n\n"
-            "⚙️ *Fonctionnalités* ⚙️\n"
+            "⚙️ <b>Fonctionnalités</b> ⚙️\n"
             "• Conservation du contexte des conversations\n"
             "• Historique complet accessible\n"
             "• Possibilité de basculer entre différents modèles d'IA\n"
@@ -189,7 +202,7 @@ class TelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text(
-            help_text, reply_markup=reply_markup, parse_mode="MarkdownV2"
+            help_text, reply_markup=reply_markup, parse_mode="HTML"
         )
 
     async def history_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -236,10 +249,10 @@ class TelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text(
-            "📚 *Voici vos conversations récentes* 📚\n"
+            "📚 <b>Voici vos conversations récentes</b> 📚\n"
             "Sélectionnez une conversation pour la continuer :",
             reply_markup=reply_markup,
-            parse_mode="MarkdownV2",
+            parse_mode="HTML",
         )
 
     async def new_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -291,10 +304,10 @@ class TelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text(
-            "⚙️ *Paramètres* ⚙️\n\n"
+            "⚙️ <b>Paramètres</b> ⚙️\n\n"
             "Personnalisez votre expérience en modifiant les paramètres ci-dessous :",
             reply_markup=reply_markup,
-            parse_mode="MarkdownV2",
+            parse_mode="HTML",
         )
 
     async def handle_conversation_selection(
@@ -363,7 +376,7 @@ class TelegramBot:
         for message in preview_messages:
             role_display = "Vous" if message.role == "user" else "Assistant"
             content_preview = truncate_text(message.content, 100)
-            messages_preview += f"*{role_display}*: {content_preview}\n\n"
+            messages_preview += f"<b>{role_display}</b>: {content_preview}\n\n"
 
         # Créer un clavier inline
         keyboard = [
@@ -380,11 +393,11 @@ class TelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await query.edit_message_text(
-            f"*Conversation du {conversation.created_at.strftime('%d/%m/%Y')}*\n\n"
+            f"<b>Conversation du {conversation.created_at.strftime('%d/%m/%Y')}</b>\n\n"
             f"{messages_preview}\n"
             f"La conversation est maintenant active. Vous pouvez continuer à échanger des messages.",
             reply_markup=reply_markup,
-            parse_mode='MarkdownV2',
+            parse_mode='HTML',
         )
 
     async def handle_model_selection(
@@ -422,10 +435,10 @@ class TelegramBot:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await query.edit_message_text(
-                "🤖 *Sélectionnez un modèle d'IA* 🤖\n\n"
+                "🤖 <b>Sélectionnez un modèle d'IA</b> 🤖\n\n"
                 "Choisissez le modèle que vous souhaitez utiliser pour vos conversations :",
                 reply_markup=reply_markup,
-                parse_mode='MarkdownV2',
+                parse_mode='HTML',
             )
             return
 
@@ -457,12 +470,69 @@ class TelegramBot:
 
         # Gérer les différentes options de paramètres
         if data == "settings_model":
-            # Rediriger vers la sélection de modèle
-            await self.handle_model_selection(update, context)
-        elif data == "settings_language":
-            # TODO: Implémenter la sélection de langue
+            # Afficher la liste des modèles disponibles
+            models = self.ai_service.get_available_models()
+
+            # Créer un clavier inline avec les modèles disponibles
+            keyboard = []
+            for model in models:
+                # Marquer le modèle actuel
+                prefix = "✅ " if model['model_id'] == self.ai_service.model_id else "🤖 "
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            f"{prefix}{model['name']}",
+                            callback_data=f"model_{model['model_id']}",
+                        )
+                    ]
+                )
+
+            keyboard.append(
+                [InlineKeyboardButton("⬅️ Retour", callback_data="settings_main")]
+            )
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
             await query.edit_message_text(
-                "🚧 La sélection de langue sera disponible prochainement. 🚧"
+                "🤖 <b>Sélectionnez un modèle d'IA</b> 🤖\n\n"
+                f"Modèle actuel : <b>{self.ai_service.model_id}</b>\n\n"
+                "Choisissez le modèle que vous souhaitez utiliser :",
+                reply_markup=reply_markup,
+                parse_mode='HTML',
+            )
+        elif data == "settings_language":
+            # Afficher les langues disponibles
+            languages = [
+                {"code": "fr", "name": "🇫🇷 Français", "prompt": "Réponds toujours en français."},
+                {"code": "en", "name": "🇺🇸 English", "prompt": "Always respond in English."},
+                {"code": "es", "name": "🇪🇸 Español", "prompt": "Responde siempre en español."},
+                {"code": "de", "name": "🇩🇪 Deutsch", "prompt": "Antworte immer auf Deutsch."},
+                {"code": "it", "name": "🇮🇹 Italiano", "prompt": "Rispondi sempre in italiano."},
+            ]
+            
+            keyboard = []
+            for lang in languages:
+                # Marquer la langue actuelle (par défaut français)
+                current_lang = self.user_languages.get(str(update.effective_user.id), 'fr')
+                prefix = "✅ " if lang['code'] == current_lang else "🌍 "
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            f"{prefix}{lang['name']}",
+                            callback_data=f"lang_{lang['code']}",
+                        )
+                    ]
+                )
+
+            keyboard.append(
+                [InlineKeyboardButton("⬅️ Retour", callback_data="settings_main")]
+            )
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await query.edit_message_text(
+                "🌍 <b>Choisissez votre langue</b> 🌍\n\n"
+                "Sélectionnez la langue dans laquelle l'assistant vous répondra :",
+                reply_markup=reply_markup,
+                parse_mode='HTML',
             )
         elif data == "settings_style":
             # TODO: Implémenter la sélection de style
@@ -498,6 +568,55 @@ class TelegramBot:
             # Afficher l'aide
             await self.help_command(update, context)
 
+    async def handle_language_selection(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        """
+        Gère la sélection d'une langue depuis les paramètres
+        """
+        query = update.callback_query
+        await query.answer()
+
+        user = update.effective_user
+        user_id = str(user.id)
+        data = query.data
+
+        # Récupérer le code de langue à partir du callback data
+        # Format: "lang_<language_code>"
+        language_code = data.split("_")[1]
+        
+        # Définir les langues disponibles
+        languages = {
+            "fr": "🇫🇷 Français",
+            "en": "🇺🇸 English", 
+            "es": "🇪🇸 Español",
+            "de": "🇩🇪 Deutsch",
+            "it": "🇮🇹 Italiano",
+        }
+
+        if language_code not in languages:
+            await query.edit_message_text(
+                "⚠️ Langue non supportée."
+            )
+            return
+
+        # Mettre à jour la langue de l'utilisateur
+        self.user_languages[user_id] = language_code
+        language_name = languages[language_code]
+
+        # Messages de confirmation selon la langue
+        confirmation_messages = {
+            "fr": f"✅ Langue changée vers {language_name}. Je répondrai maintenant en français.",
+            "en": f"✅ Language changed to {language_name}. I will now respond in English.",
+            "es": f"✅ Idioma cambiado a {language_name}. Ahora responderé en español.",
+            "de": f"✅ Sprache geändert zu {language_name}. Ich werde jetzt auf Deutsch antworten.",
+            "it": f"✅ Lingua cambiata in {language_name}. Ora risponderò in italiano.",
+        }
+
+        confirmation = confirmation_messages.get(language_code, confirmation_messages["fr"])
+        
+        await query.edit_message_text(confirmation)
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
         Gère les messages texte reçus de l'utilisateur
@@ -529,6 +648,18 @@ class TelegramBot:
         await update.message.chat.send_action(action="typing")
 
         try:
+            # Récupérer la langue de l'utilisateur
+            user_language = self.user_languages.get(user_id, "fr")  # Français par défaut
+            language_prompt = self.language_prompts.get(user_language, self.language_prompts["fr"])
+            
+            # Ajouter le prompt de langue si c'est le premier message de la conversation
+            if len(conversation.messages) == 1:
+                # Insérer le prompt système au début
+                conversation.messages.insert(0, type('Message', (), {
+                    'role': 'system',
+                    'content': language_prompt
+                })())
+
             # Traiter la conversation avec le service IA
             assistant_response = await self.ai_service.process_conversation(
                 conversation
@@ -547,7 +678,7 @@ class TelegramBot:
 
             # Formater la réponse pour Telegram et l'envoyer à l'utilisateur
             formatted_response = format_response_for_telegram(assistant_response)
-            await update.message.reply_text(formatted_response, parse_mode="MarkdownV2")
+            await update.message.reply_text(formatted_response, parse_mode="HTML")
 
         except Exception as e:
             log_error(f"Erreur lors du traitement du message: {str(e)}")
