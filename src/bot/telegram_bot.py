@@ -20,7 +20,7 @@ from datetime import datetime
 from ..config.settings import env_vars
 from ..services.conversation_service import ConversationService
 from ..services.ai_service import AIService
-from ..utils.logger import log_info, log_error
+from ..utils.logger import log_info, log_error, log_warning
 from ..utils.helpers import truncate_text, create_conversation_summary, format_response_for_telegram
 
 
@@ -621,6 +621,11 @@ class TelegramBot:
         """
         Gère les messages texte reçus de l'utilisateur
         """
+        # Vérifier que le message et le chat existent
+        if not update.message or not update.message.chat:
+            log_warning("Message reçu sans chat valide")
+            return
+            
         user = update.effective_user
         user_id = str(user.id)
         message_text = update.message.text
@@ -644,8 +649,12 @@ class TelegramBot:
         # Ajouter le message utilisateur à la conversation
         conversation.add_message(role="user", content=message_text)
 
-        # Envoyer un message "en train d'écrire"
-        await update.message.chat.send_action(action="typing")
+        # Envoyer un message "en train d'écrire" avec gestion d'erreur
+        try:
+            await update.message.chat.send_action(action="typing")
+        except Exception as e:
+            log_warning(f"Impossible d'envoyer l'action 'typing' au chat {update.message.chat.id}: {e}")
+            # Continuer même si l'action échoue
 
         try:
             # Récupérer la langue de l'utilisateur
@@ -702,15 +711,19 @@ class TelegramBot:
 
         # Informer l'utilisateur d'une erreur
         if update and update.effective_message:
-            # En mode développement, on peut envoyer l'erreur complète au client
-            if env_vars.ENV_NAME == "local" or env_vars.ENV_NAME == "dev":
-                await update.effective_message.reply_text(
-                    f"Erreur de développement: {context.error}\n\nVeuillez vérifier les logs pour plus de détails."
-                )
-            else:
-                await update.effective_message.reply_text(
-                    "Désolé, une erreur s'est produite lors du traitement de votre message."
-                )
+            try:
+                # En mode développement, on peut envoyer l'erreur complète au client
+                if env_vars.ENV_NAME == "local" or env_vars.ENV_NAME == "dev":
+                    await update.effective_message.reply_text(
+                        f"Erreur de développement: {context.error}\n\nVeuillez vérifier les logs pour plus de détails."
+                    )
+                else:
+                    await update.effective_message.reply_text(
+                        "Désolé, une erreur s'est produite lors du traitement de votre message."
+                    )
+            except Exception as reply_error:
+                log_error(f"Impossible d'envoyer le message d'erreur: {reply_error}")
+                # Si on ne peut pas répondre, on log juste l'erreur
 
     def run(self):
         """
