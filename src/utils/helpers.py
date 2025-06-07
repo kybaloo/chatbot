@@ -87,16 +87,40 @@ def batch_items(items: List[Any], batch_size: int = 25) -> List[List[Any]]:
 
 def format_response_for_telegram(text: str) -> str:
     """
-    Formate le texte de réponse pour Telegram en respectant le Markdown
-    Convertit le formatage Mistral AI au formatage Telegram
+    Formate le texte de réponse pour Telegram en utilisant le format HTML
+    Plus fiable que MarkdownV2 pour éviter les erreurs d'échappement
     """
     if not text:
         return ""
     
     import re
     
-    # Convertir le formatage gras Mistral (**texte**) au formatage Telegram (*texte*)
-    # Utilise une regex non-greedy pour éviter de matcher plusieurs ** sur une même ligne
-    formatted_text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+    # Échapper les caractères HTML de base
+    formatted_text = text.replace('&', '&amp;')
+    formatted_text = formatted_text.replace('<', '&lt;')
+    formatted_text = formatted_text.replace('>', '&gt;')
+    
+    # Bloc de code: ```texte``` -> <pre>texte</pre> (traiter en premier)
+    formatted_text = re.sub(r'```(.+?)```', r'<pre>\1</pre>', formatted_text, flags=re.DOTALL)
+    
+    # Convertir les titres Markdown vers HTML
+    # ### Titre -> <b>📋 Titre</b>
+    formatted_text = re.sub(r'^### (.+)$', r'<b>📋 \1</b>', formatted_text, flags=re.MULTILINE)
+    
+    # ## Titre -> <b>🔸 Titre</b>
+    formatted_text = re.sub(r'^## (.+)$', r'<b>🔸 \1</b>', formatted_text, flags=re.MULTILINE)
+    
+    # # Titre -> <b>🔹 Titre</b>
+    formatted_text = re.sub(r'^# (.+)$', r'<b>🔹 \1</b>', formatted_text, flags=re.MULTILINE)
+    
+    # Convertir le formatage Markdown vers HTML
+    # Gras: **texte** -> <b>texte</b>
+    formatted_text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', formatted_text)
+    
+    # Italique: *texte* -> <i>texte</i> (mais pas si c'est déjà dans du gras)
+    formatted_text = re.sub(r'(?<!</b>)\*([^*]+?)\*(?!<b>)', r'<i>\1</i>', formatted_text)
+    
+    # Code inline: `texte` -> <code>texte</code>
+    formatted_text = re.sub(r'`([^`]+?)`', r'<code>\1</code>', formatted_text)
     
     return formatted_text
