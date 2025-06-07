@@ -5,6 +5,7 @@ Gère l'interaction avec les utilisateurs via l'API Telegram
 
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram.error import BadRequest, Forbidden, ChatMigrated, NetworkError, TelegramError
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -119,15 +120,30 @@ class TelegramBot:
             update_data: Données JSON de la mise à jour Telegram
         """
         try:
+            # Vérifier que les données sont valides
+            if not update_data or not isinstance(update_data, dict):
+                log_warning("Données de mise à jour invalides ou vides")
+                return
+
             # Créer un objet Update à partir des données JSON
             update = Update.de_json(update_data, self.bot)
+            
+            if not update:
+                log_warning("Impossible de créer un objet Update à partir des données reçues")
+                return
+
+            # Vérifier si la mise à jour contient un message ou un callback valide
+            if not (update.message or update.callback_query or update.edited_message):
+                log_warning("Mise à jour reçue sans message ou callback valide")
+                return
 
             # Traiter la mise à jour avec l'application
             await self.application.process_update(update)
 
         except Exception as e:
             log_error(f"Erreur lors du traitement de la mise à jour: {str(e)}")
-            raise
+            # Ne pas re-lancer l'exception pour éviter de faire planter le webhook
+            # L'erreur est déjà loggée, cela suffit
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -172,38 +188,55 @@ class TelegramBot:
         Gère la commande /help
         Affiche l'aide et les commandes disponibles
         """
-        help_text = (
-            "🤖 <b>Commandes disponibles</b> 🤖\n\n"
-            "• /start - Démarre une nouvelle conversation\n"
-            "• /new - Crée une nouvelle conversation\n"
-            "• /history - Affiche l'historique de vos conversations\n"
-            "• /settings - Personnalisez vos préférences\n"
-            "• /help - Affiche cette aide\n\n"
-            "💬 <b>Utilisation</b> 💬\n"
-            "Envoyez-moi simplement un message et je vous répondrai. "
-            "Toutes vos conversations sont sauvegardées et vous pouvez "
-            "y revenir à tout moment via la commande /history.\n\n"
-            "⚙️ <b>Fonctionnalités</b> ⚙️\n"
-            "• Conservation du contexte des conversations\n"
-            "• Historique complet accessible\n"
-            "• Possibilité de basculer entre différents modèles d'IA\n"
-            "• Interface intuitive avec boutons\n\n"
-            "Pour toute question ou problème, n'hésitez pas à contacter l'administrateur."
-        )
+        try:
+            # Vérifier que le message et le chat existent et sont accessibles
+            if not update.message or not update.message.chat:
+                log_warning("Commande /help reçue sans message ou chat valide")
+                return
 
-        # Créer un clavier inline avec des boutons d'action rapide
-        keyboard = [
-            [
-                InlineKeyboardButton("Nouvelle conversation", callback_data="conv_new"),
-                InlineKeyboardButton("Historique", callback_data="conv_history"),
-            ],
-            [InlineKeyboardButton("Paramètres", callback_data="settings_main")],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+            help_text = (
+                "🤖 <b>Commandes disponibles</b> 🤖\n\n"
+                "• /start - Démarre une nouvelle conversation\n"
+                "• /new - Crée une nouvelle conversation\n"
+                "• /history - Affiche l'historique de vos conversations\n"
+                "• /settings - Personnalisez vos préférences\n"
+                "• /help - Affiche cette aide\n\n"
+                "💬 <b>Utilisation</b> 💬\n"
+                "Envoyez-moi simplement un message et je vous répondrai. "
+                "Toutes vos conversations sont sauvegardées et vous pouvez "
+                "y revenir à tout moment via la commande /history.\n\n"
+                "⚙️ <b>Fonctionnalités</b> ⚙️\n"
+                "• Conservation du contexte des conversations\n"
+                "• Historique complet accessible\n"
+                "• Possibilité de basculer entre différents modèles d'IA\n"
+                "• Interface intuitive avec boutons\n\n"
+                "Pour toute question ou problème, n'hésitez pas à contacter l'administrateur."
+            )
 
-        await update.message.reply_text(
-            help_text, reply_markup=reply_markup, parse_mode="HTML"
-        )
+            # Créer un clavier inline avec des boutons d'action rapide
+            keyboard = [
+                [
+                    InlineKeyboardButton("Nouvelle conversation", callback_data="conv_new"),
+                    InlineKeyboardButton("Historique", callback_data="conv_history"),
+                ],
+                [InlineKeyboardButton("Paramètres", callback_data="settings_main")],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.message.reply_text(
+                help_text, reply_markup=reply_markup, parse_mode="HTML"
+            )
+        except Exception as e:
+            log_error(f"Erreur dans help_command: {str(e)}")
+            # Essayer de répondre avec un message simple sans formatage
+            try:
+                await update.message.reply_text(
+                    "Désolé, une erreur s'est produite lors de l'affichage de l'aide. "
+                    "Le bot fonctionne normalement, vous pouvez envoyer vos messages."
+                )
+            except Exception as reply_error:
+                log_error(f"Impossible de répondre à la commande /help: {reply_error}")
+                # Si même la réponse simple échoue, ne rien faire
 
     async def history_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -709,8 +742,32 @@ class TelegramBot:
             tb_str = ''.join(traceback.format_tb(context.error.__traceback__))
             log_error(f"Traceback: {tb_str}")
 
-        # Informer l'utilisateur d'une erreur
-        if update and update.effective_message:
+        # Traitement spécifique selon le type d'erreur Telegram
+        if isinstance(context.error, BadRequest):
+            if "chat not found" in str(context.error).lower():
+                log_warning(f"Chat non trouvé, impossible de répondre: {context.error}")
+                return
+            elif "message to edit not found" in str(context.error).lower():
+                log_warning(f"Message à éditer introuvable: {context.error}")
+                return
+        elif isinstance(context.error, Forbidden):
+            log_warning(f"Bot bloqué par l'utilisateur ou permissions insuffisantes: {context.error}")
+            return
+        elif isinstance(context.error, ChatMigrated):
+            log_info(f"Chat migré vers un nouveau chat_id: {context.error}")
+            return
+        elif isinstance(context.error, NetworkError):
+            log_warning(f"Erreur réseau Telegram: {context.error}")
+            return
+
+        # Vérifier si l'erreur est liée à un chat non trouvé ou inaccessible (fallback)
+        error_str = str(context.error).lower()
+        if any(keyword in error_str for keyword in ['chat not found', 'forbidden', 'blocked', 'chat_not_found']):
+            log_warning(f"Chat inaccessible, impossible de répondre: {context.error}")
+            return
+
+        # Informer l'utilisateur d'une erreur seulement si le chat est accessible
+        if update and update.effective_message and update.effective_message.chat:
             try:
                 # En mode développement, on peut envoyer l'erreur complète au client
                 if env_vars.ENV_NAME == "local" or env_vars.ENV_NAME == "dev":
