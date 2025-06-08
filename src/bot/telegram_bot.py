@@ -136,10 +136,28 @@ class TelegramBot:
             if not (update.message or update.callback_query or update.edited_message):
                 log_warning("Mise à jour reçue sans message ou callback valide")
                 return
+                
+            # Vérification supplémentaire pour le cas d'un message
+            if update.message and update.message.chat:
+                try:
+                    # Vérifier rapidement si le chat est accessible
+                    chat_id = update.message.chat_id
+                    # Cela peut lancer une exception si le chat n'est pas accessible
+                    await self.bot.get_chat(chat_id)
+                except Exception as chat_error:
+                    log_warning(f"Chat {chat_id} inaccessible lors du traitement de la mise à jour: {chat_error}")
+                    return
 
             # Traiter la mise à jour avec l'application
             await self.application.process_update(update)
 
+        except BadRequest as br_error:
+            if "chat not found" in str(br_error).lower():
+                log_warning(f"Chat not found lors du traitement de la mise à jour: {br_error}")
+            else:
+                log_error(f"BadRequest lors du traitement de la mise à jour: {str(br_error)}")
+        except Forbidden as f_error:
+            log_warning(f"Forbidden lors du traitement de la mise à jour: {str(f_error)}")
         except Exception as e:
             log_error(f"Erreur lors du traitement de la mise à jour: {str(e)}")
             # Ne pas re-lancer l'exception pour éviter de faire planter le webhook
@@ -192,6 +210,15 @@ class TelegramBot:
             # Vérifier que le message et le chat existent et sont accessibles
             if not update.message or not update.message.chat:
                 log_warning("Commande /help reçue sans message ou chat valide")
+                return
+
+            # Vérification supplémentaire pour s'assurer que le chat est accessible
+            try:
+                chat_id = update.message.chat_id
+                # Effectuer une simple vérification du chat avant de poursuivre
+                await self.bot.get_chat(chat_id)
+            except Exception as chat_error:
+                log_warning(f"Chat inaccessible dans help_command: {chat_error}")
                 return
 
             help_text = (
@@ -419,7 +446,7 @@ class TelegramBot:
                 ),
                 InlineKeyboardButton(
                     "🗑️ Supprimer", callback_data=f"settings_delete_{conversation_id}"
-                ),
+                )
             ],
             [InlineKeyboardButton("📚 Historique", callback_data="conv_history")],
         ]
@@ -662,6 +689,14 @@ class TelegramBot:
         user = update.effective_user
         user_id = str(user.id)
         message_text = update.message.text
+        chat_id = update.message.chat_id
+        
+        # Vérification supplémentaire de l'accessibilité du chat
+        try:
+            await self.bot.get_chat(chat_id)
+        except Exception as e:
+            log_warning(f"Chat {chat_id} inaccessible pour handle_message: {e}")
+            return
 
         # Récupérer ou créer une conversation
         conversation_id = self.active_conversations.get(user.id)
@@ -686,7 +721,7 @@ class TelegramBot:
         try:
             await update.message.chat.send_action(action="typing")
         except Exception as e:
-            log_warning(f"Impossible d'envoyer l'action 'typing' au chat {update.message.chat.id}: {e}")
+            log_warning(f"Impossible d'envoyer l'action 'typing' au chat {chat_id}: {e}")
             # Continuer même si l'action échoue
 
         try:
@@ -718,16 +753,29 @@ class TelegramBot:
                 conversation.conversation_id, conversation
             )
 
+            # Vérifier à nouveau si le chat est toujours accessible avant d'envoyer la réponse
+            try:
+                await self.bot.get_chat(chat_id)
+            except Exception as e:
+                log_warning(f"Chat {chat_id} devenu inaccessible avant d'envoyer la réponse: {e}")
+                return
+
             # Formater la réponse pour Telegram et l'envoyer à l'utilisateur
             formatted_response = format_response_for_telegram(assistant_response)
             await update.message.reply_text(formatted_response, parse_mode="HTML")
 
         except Exception as e:
             log_error(f"Erreur lors du traitement du message: {str(e)}")
-            await update.message.reply_text(
-                "Désolé, j'ai rencontré un problème lors du traitement de votre message. "
-                "Veuillez réessayer plus tard."
-            )
+            try:
+                # Vérifier si le chat est encore accessible avant d'envoyer le message d'erreur
+                await self.bot.get_chat(chat_id)
+                await update.message.reply_text(
+                    "Désolé, j'ai rencontré un problème lors du traitement de votre message. "
+                    "Veuillez réessayer plus tard."
+                )
+            except Exception as reply_error:
+                log_error(f"Impossible d'envoyer le message d'erreur: {reply_error}")
+                # Si on ne peut pas répondre, on log juste l'erreur et on continue
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -744,11 +792,14 @@ class TelegramBot:
 
         # Traitement spécifique selon le type d'erreur Telegram
         if isinstance(context.error, BadRequest):
-            if "chat not found" in str(context.error).lower():
-                log_warning(f"Chat non trouvé, impossible de répondre: {context.error}")
+            if any(msg in str(context.error).lower() for msg in ["chat not found", "user not found"]):
+                log_warning(f"Chat ou utilisateur non trouvé, impossible de répondre: {context.error}")
                 return
             elif "message to edit not found" in str(context.error).lower():
                 log_warning(f"Message à éditer introuvable: {context.error}")
+                return
+            elif "message is not modified" in str(context.error).lower():
+                log_info(f"Message non modifié (normal): {context.error}")
                 return
         elif isinstance(context.error, Forbidden):
             log_warning(f"Bot bloqué par l'utilisateur ou permissions insuffisantes: {context.error}")
@@ -762,13 +813,21 @@ class TelegramBot:
 
         # Vérifier si l'erreur est liée à un chat non trouvé ou inaccessible (fallback)
         error_str = str(context.error).lower()
-        if any(keyword in error_str for keyword in ['chat not found', 'forbidden', 'blocked', 'chat_not_found']):
+        if any(keyword in error_str for keyword in ['chat not found', 'forbidden', 'blocked', 'chat_not_found', 'user not found']):
             log_warning(f"Chat inaccessible, impossible de répondre: {context.error}")
             return
 
         # Informer l'utilisateur d'une erreur seulement si le chat est accessible
         if update and update.effective_message and update.effective_message.chat:
             try:
+                # Vérifier si le chat est accessible avant d'essayer de répondre
+                try:
+                    chat_id = update.effective_message.chat_id
+                    await self.bot.get_chat(chat_id)
+                except Exception:
+                    log_warning(f"Chat {chat_id} inaccessible avant de répondre à l'erreur")
+                    return
+                
                 # En mode développement, on peut envoyer l'erreur complète au client
                 if env_vars.ENV_NAME == "local" or env_vars.ENV_NAME == "dev":
                     await update.effective_message.reply_text(
@@ -781,14 +840,6 @@ class TelegramBot:
             except Exception as reply_error:
                 log_error(f"Impossible d'envoyer le message d'erreur: {reply_error}")
                 # Si on ne peut pas répondre, on log juste l'erreur
-
-    def run(self):
-        """
-        Lance le bot Telegram en mode webhook
-        """
-        log_info("Bot Telegram initialisé pour mode webhook")
-        # En mode webhook, nous n'utilisons pas run_webhook() ici
-        # car le traitement se fait via process_update() appelé par FastAPI
 
     async def initialize(self):
         """
@@ -804,22 +855,15 @@ class TelegramBot:
                 await self.application.initialize()
                 
                 # Définir les commandes du bot pour qu'elles apparaissent dans l'interface Telegram
-                await self.set_bot_commands()
-                
+                try:
+                    await self.set_bot_commands()
+                except Exception as cmd_error:
+                    log_warning(f"Impossible de définir les commandes du bot, mais l'initialisation continue: {cmd_error}")
+                    # Ne pas bloquer l'initialisation complète si la définition des commandes échoue
+                    
                 log_info("Application Telegram initialisée avec succès")
             else:
                 raise Exception("Application Telegram non créée")
         except Exception as e:
             log_error(f"Erreur lors de l'initialisation de l'application Telegram: {str(e)}")
             raise
-
-    async def shutdown(self):
-        """
-        Arrête proprement l'application Telegram
-        """
-        try:
-            if self.application:
-                await self.application.shutdown()
-                log_info("Application Telegram arrêtée proprement")
-        except Exception as e:
-            log_error(f"Erreur lors de l'arrêt de l'application Telegram: {str(e)}")
