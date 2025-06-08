@@ -12,7 +12,7 @@ import sys
 
 from .config.settings import env_vars
 from .api.routes import router as api_router
-from .utils.logger import setup_logger, log_info, log_error
+from .utils.logger import setup_logger, log_info, log_error, log_warning
 
 # Initialiser le logger
 logger = setup_logger()
@@ -69,12 +69,15 @@ async def app_lifespan(app: FastAPI):
     yield
     
     log_info("Arrêt de l'application...")
-    
-    # Arrêter proprement le bot Telegram si initialisé
+      # Arrêter proprement le bot Telegram si initialisé
     if hasattr(app.state, "telegram_bot") and app.state.telegram_bot:
         try:
-            await app.state.telegram_bot.shutdown()
-            log_info("Bot Telegram arrêté proprement")
+            # Vérifier si la méthode shutdown existe
+            if hasattr(app.state.telegram_bot, "shutdown"):
+                await app.state.telegram_bot.shutdown()
+                log_info("Bot Telegram arrêté proprement")
+            else:
+                log_warning("Méthode shutdown non trouvée dans le bot Telegram, arrêt ignoré")
         except Exception as e:
             log_error(f"Erreur lors de l'arrêt du bot Telegram: {str(e)}")
             # Continuer même si l'arrêt du bot échoue
@@ -115,20 +118,28 @@ async def telegram_webhook(request: Request):
     try:
         # Vérifier que la requête contient du JSON valide
         content_type = request.headers.get("content-type", "")
-        if "application/json" not in content_type:
-            log_error(f"Content-Type invalide: {content_type}")
-            raise HTTPException(status_code=400, detail="Content-Type doit être application/json")
-
+        
+        # Être plus permissif avec les types de contenu
+        is_json = any(json_type in content_type.lower() for json_type in ["application/json", "json"]) or not content_type
+        
+        if not is_json:
+            log_warning(f"Content-Type inhabituel mais on continue: {content_type}")
+            
         # Récupérer les données JSON de la requête
         try:
             update_data = await request.json()
         except Exception as json_error:
             log_error(f"Erreur de parsing JSON: {str(json_error)}")
-            raise HTTPException(status_code=400, detail="JSON invalide")
+            # En environnement de production, mieux vaut retourner un 200 pour éviter les retentatives
+            # de Telegram qui pourraient surcharger le système
+            if env_vars.ENV_NAME != "local" and env_vars.ENV_NAME != "dev":
+                return {"status": "error", "message": "JSON invalide"}
+            else:
+                raise HTTPException(status_code=400, detail="JSON invalide")
 
         if not update_data:
-            log_error("Données de mise à jour vides")
-            raise HTTPException(status_code=400, detail="Données vides")
+            log_warning("Données de mise à jour vides, mais on continue")
+            return {"status": "ok", "message": "Données vides"}
 
         # Limiter les logs pour éviter de surcharger CloudWatch
         # Log uniquement des informations minimales sur la mise à jour
@@ -145,14 +156,16 @@ async def telegram_webhook(request: Request):
         # Répondre immédiatement au webhook
         return {"status": "ok"}
 
-    except HTTPException:
-        # Re-lever les HTTPException sans les modifier
+    except HTTPException as http_ex:
+        if env_vars.ENV_NAME != "local" and env_vars.ENV_NAME != "dev":
+            log_error(f"HTTPException interceptée: {http_ex.detail}")
+            return {"status": "error", "message": http_ex.detail}
         raise
     except Exception as e:
         log_error(f"Erreur lors du traitement du webhook Telegram: {str(e)}")
         # Même en cas d'erreur, répondre avec un statut 200 pour éviter que Telegram ne réessaie
         # Les erreurs sont loggées et peuvent être analysées dans CloudWatch
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Erreur de traitement"}
 
 
 # Handler pour AWS Lambda via Mangum
