@@ -866,4 +866,18 @@ class TelegramBot:
                 raise Exception("Application Telegram non créée")
         except Exception as e:
             log_error(f"Erreur lors de l'initialisation de l'application Telegram: {str(e)}")
-            raise
+
+    async def shutdown(self):
+        """
+        Arrête proprement l'application Telegram
+        """
+        try:
+            if self.application:
+                await self.application.shutdown()
+                log_info("Application Telegram arrêtée proprement")
+            
+            if self.bot:
+                await self.bot.shutdown()
+                log_info("Bot Telegram arrêté proprement")
+        except Exception as e:
+            log_error(f"Erreur lors de l'arrêt de l'application Telegram: {str(e)}")
